@@ -12,13 +12,13 @@ This avoids nested tmux clients by capturing pane contents via `tmux capture-pan
 ## Run
 
 ```bash
-go run .
+go run ./src
 ```
 
 Optional flags:
 
 ```bash
-go run . -lines 300 -interval 500ms -cmd-timeout 1s -workers 4
+go run ./src -lines 300 -interval 500ms -cmd-timeout 1s -workers 4
 ```
 
 Defaults are `-lines 500` and `-interval 1s`.
@@ -28,10 +28,15 @@ Defaults are `-lines 500` and `-interval 1s`.
 - `q` / `Ctrl+C`: quit
 - `r`: refresh immediately
 - `+` / `-`: increase or decrease captured lines
+- `[` / `]`: decrease or increase refresh interval
+- `m`: toggle mouse capture (enable scroll + click vs. allow terminal text selection)
+- `Ctrl+K`: kill focused tmux session
 - `Tab` / `Shift+Tab` (or `n` / `p`): change focused session
 - `j` / `k` or arrow keys: scroll focused session
 - `PageUp` / `PageDown`: scroll faster
 - `Home` / `End`: jump to top or bottom
+- `i`: compose input (multi-line; `Enter` inserts newline)
+- `Ctrl+S`: finish compose and choose target, `Enter` to send, click to send, `Esc` to cancel
 
 ## How it works
 
