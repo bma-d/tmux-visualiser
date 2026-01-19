@@ -1,0 +1,6 @@
+# Binaries
+/tmux-visualiser
+
+# Go build artifacts
+*.out
+*.test
