@@ -1,4 +1,4 @@
-module tmux-visualiser
+module github.com/bma-d/tmux-visualiser
 
 go 1.24.0
 

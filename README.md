@@ -15,6 +15,49 @@ This avoids nested tmux clients by capturing pane contents via `tmux capture-pan
 go run ./src
 ```
 
+## Install
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install bma-d/tap/tmux-visualiser
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop bucket add bma-d https://github.com/bma-d/scoop-bucket
+scoop install tmux-visualiser
+```
+
+### Debian/Ubuntu (.deb)
+
+```bash
+sudo dpkg -i tmux-visualiser_*.deb
+```
+
+### Fedora/RHEL (.rpm)
+
+```bash
+sudo rpm -i tmux-visualiser_*.rpm
+```
+
+### Alpine (.apk)
+
+```bash
+sudo apk add --allow-untrusted tmux-visualiser_*.apk
+```
+
+### Go install
+
+```bash
+go install github.com/bma-d/tmux-visualiser@latest
+```
+
+### Manual download
+
+Download the archive for your OS/arch from the Releases page and extract it to a directory on your PATH.
+
 Optional flags:
 
 ```bash

@@ -9,13 +9,27 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	cfg := config{}
+	showVersion := false
 	flag.IntVar(&cfg.lines, "lines", 500, "number of lines to capture per session")
 	flag.DurationVar(&cfg.interval, "interval", 1*time.Second, "refresh interval")
 	flag.DurationVar(&cfg.cmdTimeout, "cmd-timeout", 900*time.Millisecond, "timeout for each tmux command")
 	flag.IntVar(&cfg.maxWorkers, "workers", 4, "max concurrent tmux capture workers")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+	flag.BoolVar(&showVersion, "v", false, "print version and exit (shorthand)")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("tmux-visualiser %s (commit %s, built %s)\n", version, commit, date)
+		return
+	}
 
 	if cfg.lines < 20 {
 		cfg.lines = 20
