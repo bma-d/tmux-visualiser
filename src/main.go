@@ -113,6 +113,12 @@ func main() {
 					}
 					continue
 				}
+				if state.sendKeyActive {
+					if handleSendKey(ctx, &state, cfg, tev) {
+						draw(screen, state, cfg)
+					}
+					continue
+				}
 				switch tev.Key() {
 				case tcell.KeyCtrlC:
 					running = false
@@ -121,6 +127,17 @@ func main() {
 						state.lastErr = err.Error()
 					}
 					refresh()
+				case tcell.KeyEnter:
+					exit, err := connectFocused(ctx, &state, cfg, screen)
+					if err != nil {
+						if !exit {
+							state.lastErr = err.Error()
+							draw(screen, state, cfg)
+						}
+					}
+					if exit {
+						running = false
+					}
 				case tcell.KeyUp:
 					scrollFocused(&state, screen, -1)
 					draw(screen, state, cfg)
@@ -173,6 +190,9 @@ func main() {
 						refresh()
 					case 'i', 'I':
 						startCompose(&state)
+						draw(screen, state, cfg)
+					case 's', 'S':
+						startSendKey(&state)
 						draw(screen, state, cfg)
 					case 'm', 'M':
 						if state.mouseEnabled {

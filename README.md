@@ -74,6 +74,8 @@ Defaults are `-lines 500` and `-interval 1s`.
 - `[` / `]`: decrease or increase refresh interval
 - `m`: toggle mouse capture (enable scroll + click vs. allow terminal text selection)
 - `Ctrl+K`: kill focused tmux session
+- `Enter`: attach to focused session (exits the visualiser)
+- `s`: send a single key to the focused pane (supports `Enter`, `Backspace`, `Ctrl+C`, etc.)
 - `Tab` / `Shift+Tab` (or `n` / `p`): change focused session
 - `j` / `k` or arrow keys: scroll focused session
 - `PageUp` / `PageDown`: scroll faster
@@ -93,3 +95,14 @@ Defaults are `-lines 500` and `-interval 1s`.
 - If no tmux server is running, the UI shows a message and keeps polling.
 - The refresh interval is clamped to avoid excessive CPU usage.
 - Captured output is bounded, so memory stays stable.
+
+## Changelog
+
+### Unreleased
+
+- Add Enter-to-attach for jumping into the focused tmux session.
+- Add single-key send mode (`s`) to send `Enter`, `Backspace`, `Ctrl+C`, and other keys.
+
+### 1.0.0 - 2026-01-20
+
+- Initial release.

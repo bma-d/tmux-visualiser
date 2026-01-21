@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -31,4 +32,12 @@ func runTmux(ctx context.Context, cfg config, args ...string) (string, error) {
 		return "", errors.New(msg)
 	}
 	return strings.TrimRight(stdout.String(), "\n"), nil
+}
+
+func runTmuxInteractive(args ...string) error {
+	cmd := exec.Command("tmux", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

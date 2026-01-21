@@ -183,12 +183,15 @@ func drawStatus(screen tcell.Screen, width, y int, style tcell.Style, state appS
 	if state.mouseEnabled {
 		mouseState = "on"
 	}
-	label := fmt.Sprintf("sessions:%d | lines:%d | interval:%s | tab:focus j/k:scroll i:compose Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", sessionCount, cfg.lines, cfg.interval, mouseState)
+	label := fmt.Sprintf("sessions:%d | lines:%d | interval:%s | tab:focus j/k:scroll enter:attach i:compose s:send-key Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", sessionCount, cfg.lines, cfg.interval, mouseState)
 	if state.composeActive {
 		label = "compose: type freely (enter=newline) | Ctrl+S choose target | Esc cancel"
 	}
 	if state.selectTarget {
 		label = "select target: click or Tab/Shift+Tab | Enter send | Esc cancel"
+	}
+	if state.sendKeyActive {
+		label = "send key: press key to send | Esc cancel"
 	}
 	if state.lastErr != "" {
 		label = fmt.Sprintf("error: %s", state.lastErr)

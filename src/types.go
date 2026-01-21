@@ -28,6 +28,7 @@ type appState struct {
 	focusName     string
 	composeActive bool
 	selectTarget  bool
+	sendKeyActive bool
 	composeBuf    []rune
 	mouseEnabled  bool
 }
