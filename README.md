@@ -82,6 +82,7 @@ Defaults are `-lines 500` and `-interval 1s`.
 - `Home` / `End`: jump to top or bottom
 - `i`: compose input (multi-line; `Enter` inserts newline)
 - `Ctrl+S`: finish compose and choose target, `Enter` to send, click to send, `Esc` to cancel
+- When an update prompt appears: `U` to update, `I` to ignore for 7 days, `Esc` to dismiss
 
 ## How it works
 
@@ -102,6 +103,7 @@ Defaults are `-lines 500` and `-interval 1s`.
 
 - Add Enter-to-attach for jumping into the focused tmux session.
 - Add single-key send mode (`s`) to send `Enter`, `Backspace`, `Ctrl+C`, and other keys.
+- Add update checks with an optional 7-day ignore window and in-app update trigger.
 
 ### 1.0.0 - 2026-01-20
 

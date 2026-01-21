@@ -62,6 +62,12 @@ func main() {
 	defer cancel()
 
 	events := make(chan tcell.Event, 16)
+	updateCh := make(chan updateResult, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		updateCh <- checkForUpdate(ctx, version)
+	}()
 	go func() {
 		for {
 			ev := screen.PollEvent()
@@ -91,6 +97,12 @@ func main() {
 		select {
 		case <-ticker.C:
 			refresh()
+		case update := <-updateCh:
+			if update.err == nil && update.available {
+				state.updatePrompt = true
+				state.updateVersion = update.latest
+				draw(screen, state, cfg)
+			}
 		case ev, ok := <-events:
 			if !ok {
 				running = false
@@ -101,6 +113,25 @@ func main() {
 				screen.Sync()
 				draw(screen, state, cfg)
 			case *tcell.EventKey:
+				if state.updatePrompt {
+					action, handled := handleUpdateKey(&state, tev)
+					if handled {
+						if action == updateNow {
+							updated, err := runUpdateFlow(screen, state.updateVersion)
+							if err != nil && !updated {
+								state.lastErr = err.Error()
+								draw(screen, state, cfg)
+								break
+							}
+							if updated {
+								running = false
+								break
+							}
+						}
+						draw(screen, state, cfg)
+						break
+					}
+				}
 				if state.composeActive {
 					if handleComposeKey(ctx, &state, cfg, tev) {
 						draw(screen, state, cfg)

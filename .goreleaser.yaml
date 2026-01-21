@@ -9,6 +9,8 @@ builds:
   - id: tmux-visualiser
     main: ./src
     binary: tmux-visualiser
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
     env:
       - CGO_ENABLED=0
     goos:

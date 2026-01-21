@@ -29,6 +29,8 @@ type appState struct {
 	composeActive bool
 	selectTarget  bool
 	sendKeyActive bool
+	updatePrompt  bool
+	updateVersion string
 	composeBuf    []rune
 	mouseEnabled  bool
 }

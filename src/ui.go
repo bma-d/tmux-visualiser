@@ -63,7 +63,9 @@ func draw(screen tcell.Screen, state appState, cfg config) {
 		}
 	}
 
-	if state.composeActive {
+	if state.updatePrompt {
+		drawUpdateOverlay(screen, width, height, state)
+	} else if state.composeActive {
 		drawComposeOverlay(screen, width, height, state)
 	} else if state.selectTarget {
 		drawSelectOverlay(screen, width, height)
@@ -190,6 +192,9 @@ func drawStatus(screen tcell.Screen, width, y int, style tcell.Style, state appS
 	if state.selectTarget {
 		label = "select target: click or Tab/Shift+Tab | Enter send | Esc cancel"
 	}
+	if state.updatePrompt {
+		label = fmt.Sprintf("update available %s | U update | I ignore 7 days | Esc dismiss", state.updateVersion)
+	}
 	if state.sendKeyActive {
 		label = "send key: press key to send | Esc cancel"
 	}
@@ -256,4 +261,16 @@ func drawSelectOverlay(screen tcell.Screen, width, height int) {
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorYellow)
 	drawBox(screen, 0, 0, width, 3, boxStyle)
 	drawText(screen, 1, 1, width-2, "Select target: click or Tab/Shift+Tab | Enter send | Esc cancel", boxStyle)
+}
+
+func drawUpdateOverlay(screen tcell.Screen, width, height int, state appState) {
+	if width < 10 || height < 5 {
+		return
+	}
+	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorLightCyan)
+	headStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorLightCyan).Bold(true)
+	drawBox(screen, 0, 0, width, 4, boxStyle)
+	drawText(screen, 1, 1, width-2, "Update available", headStyle)
+	msg := fmt.Sprintf("Latest: %s | U update | I ignore 7 days | Esc dismiss", state.updateVersion)
+	drawText(screen, 1, 2, width-2, msg, boxStyle)
 }
