@@ -105,6 +105,10 @@ Defaults are `-lines 500` and `-interval 1s`.
 - Add single-key send mode (`s`) to send `Enter`, `Backspace`, `Ctrl+C`, and other keys.
 - Add update checks with an optional 7-day ignore window and in-app update trigger.
 
+### 1.0.1 - 2026-01-26
+
+- Prefer taller grids when the layout would otherwise be wider than it is tall.
+
 ### 1.0.0 - 2026-01-20
 
 - Initial release.

@@ -18,6 +18,9 @@ func gridDims(count int) (cols, rows int) {
 	if rows < 1 {
 		rows = 1
 	}
+	if rows < cols {
+		cols, rows = rows, cols
+	}
 	return cols, rows
 }
 

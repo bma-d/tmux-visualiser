@@ -15,10 +15,10 @@ func TestGridDims(t *testing.T) {
 	}{
 		{0, 1, 1},
 		{1, 1, 1},
-		{2, 2, 1},
+		{2, 1, 2},
 		{3, 2, 2},
 		{4, 2, 2},
-		{5, 3, 2},
+		{5, 2, 3},
 		{9, 3, 3},
 	}
 	for _, c := range cases {
@@ -80,7 +80,7 @@ func TestContentHeightForIndex(t *testing.T) {
 	defer screen.Fini()
 	screen.SetSize(80, 20)
 
-	if h := contentHeightForIndex(2, 0, screen); h != 16 {
+	if h := contentHeightForIndex(2, 0, screen); h != 6 {
 		t.Fatalf("contentHeightForIndex = %d", h)
 	}
 }
