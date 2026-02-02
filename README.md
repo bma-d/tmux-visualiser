@@ -102,9 +102,14 @@ Defaults are `-lines 500` and `-interval 1s`.
 
 ### Unreleased
 
-- Add Enter-to-attach for jumping into the focused tmux session.
-- Add single-key send mode (`s`) to send `Enter`, `Backspace`, `Ctrl+C`, and other keys.
-- Add update checks with an optional 7-day ignore window and in-app update trigger.
+- (none)
+
+### 1.1.0 - 2026-02-02
+
+- Compose now sends keys to the focused pane in real time, matching tmux more closely.
+- Escape is forwarded to tmux; Ctrl+S exits modes.
+- Multi-session layout favors horizontal splits.
+- Focused pane color changes by mode for clear visual feedback.
 
 ### 1.0.2 - 2026-01-26
 
