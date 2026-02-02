@@ -18,6 +18,16 @@ func startCompose(state *appState) {
 	state.composeBuf = nil
 }
 
+func isCtrlS(ev *tcell.EventKey) bool {
+	if ev.Key() == tcell.KeyCtrlS {
+		return true
+	}
+	if ev.Key() == tcell.KeyRune && ev.Modifiers()&tcell.ModCtrl != 0 {
+		return ev.Rune() == 's' || ev.Rune() == 'S'
+	}
+	return false
+}
+
 func startSendKey(state *appState) {
 	state.sendKeyActive = true
 	state.composeActive = false
@@ -25,50 +35,30 @@ func startSendKey(state *appState) {
 }
 
 func handleComposeKey(ctx context.Context, state *appState, cfg config, ev *tcell.EventKey) bool {
-	switch ev.Key() {
-	case tcell.KeyEsc:
+	if isCtrlS(ev) {
 		state.composeActive = false
 		state.selectTarget = false
 		state.composeBuf = nil
 		return true
-	case tcell.KeyCtrlS:
-		if len(state.sessions) == 0 {
-			state.lastErr = "no tmux sessions"
-			return true
-		}
-		state.composeActive = false
-		state.selectTarget = true
-		return true
-	case tcell.KeyCtrlU:
-		state.composeBuf = nil
-		return true
-	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if len(state.composeBuf) > 0 {
-			state.composeBuf = state.composeBuf[:len(state.composeBuf)-1]
-		}
-		return true
-	case tcell.KeyEnter:
-		state.composeBuf = append(state.composeBuf, '\n')
-		return true
-	case tcell.KeyCtrlC:
-		state.composeActive = false
-		state.selectTarget = false
-		return true
-	case tcell.KeyRune:
-		r := ev.Rune()
-		if r != 0 {
-			state.composeBuf = append(state.composeBuf, r)
-			return true
-		}
 	}
-	_ = ctx
-	_ = cfg
-	return false
+	key, literal, ok := tmuxKeyFromEvent(ev)
+	if !ok {
+		return false
+	}
+	if err := sendKeyToFocused(ctx, state, cfg, key, literal); err != nil {
+		state.lastErr = err.Error()
+	}
+	return true
 }
 
 func handleSelectKey(ctx context.Context, state *appState, cfg config, ev *tcell.EventKey, screen tcell.Screen) bool {
 	switch ev.Key() {
 	case tcell.KeyEsc:
+		if err := sendKeyToFocused(ctx, state, cfg, "Escape", false); err != nil {
+			state.lastErr = err.Error()
+		}
+		return true
+	case tcell.KeyCtrlS:
 		state.selectTarget = false
 		return true
 	case tcell.KeyEnter:
@@ -89,7 +79,9 @@ func handleSelectKey(ctx context.Context, state *appState, cfg config, ev *tcell
 		moveFocus(state, 1)
 		return true
 	case tcell.KeyCtrlC:
-		state.selectTarget = false
+		if err := sendKeyToFocused(ctx, state, cfg, "C-c", false); err != nil {
+			state.lastErr = err.Error()
+		}
 		return true
 	case tcell.KeyRune:
 		r := ev.Rune()
@@ -204,8 +196,7 @@ func killFocusedSession(ctx context.Context, state *appState, cfg config) error 
 }
 
 func handleSendKey(ctx context.Context, state *appState, cfg config, ev *tcell.EventKey) bool {
-	switch ev.Key() {
-	case tcell.KeyEsc:
+	if isCtrlS(ev) {
 		state.sendKeyActive = false
 		return true
 	}
@@ -222,6 +213,8 @@ func handleSendKey(ctx context.Context, state *appState, cfg config, ev *tcell.E
 
 func tmuxKeyFromEvent(ev *tcell.EventKey) (string, bool, bool) {
 	switch ev.Key() {
+	case tcell.KeyEsc:
+		return "Escape", false, true
 	case tcell.KeyRune:
 		r := ev.Rune()
 		if r == 0 {

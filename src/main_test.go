@@ -100,6 +100,22 @@ func TestParseSGRParams(t *testing.T) {
 	}
 }
 
+func TestTmuxKeyFromEventEscape(t *testing.T) {
+	ev := tcell.NewEventKey(tcell.KeyEsc, 0, 0)
+	key, literal, ok := tmuxKeyFromEvent(ev)
+	if !ok || key != "Escape" || literal {
+		t.Fatalf("escape = (%q,%v,%v)", key, literal, ok)
+	}
+}
+
+func TestTmuxKeyFromEventAltEscape(t *testing.T) {
+	ev := tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModAlt)
+	key, literal, ok := tmuxKeyFromEvent(ev)
+	if !ok || key != "Escape" || literal {
+		t.Fatalf("alt-escape = (%q,%v,%v)", key, literal, ok)
+	}
+}
+
 func TestApplySGR(t *testing.T) {
 	base := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
 	state := ansiState{style: base}
@@ -163,31 +179,21 @@ func TestDrawAnsiText(t *testing.T) {
 }
 
 func TestHandleComposeKey(t *testing.T) {
-	state := appState{sessions: map[string]sessionView{"one": {}}}
+	state := appState{sessions: map[string]sessionView{}}
 	cfg := config{}
 	ctx := context.Background()
 
 	if !handleComposeKey(ctx, &state, cfg, tcell.NewEventKey(tcell.KeyRune, 'a', tcell.ModNone)) {
 		t.Fatalf("expected handled")
 	}
-	if string(state.composeBuf) != "a" {
-		t.Fatalf("buf = %q", string(state.composeBuf))
-	}
-
-	handleComposeKey(ctx, &state, cfg, tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
-	if string(state.composeBuf) != "a\n" {
-		t.Fatalf("buf after enter = %q", string(state.composeBuf))
-	}
-
-	handleComposeKey(ctx, &state, cfg, tcell.NewEventKey(tcell.KeyBackspace, 0, tcell.ModNone))
-	if string(state.composeBuf) != "a" {
-		t.Fatalf("buf after backspace = %q", string(state.composeBuf))
+	if state.lastErr == "" {
+		t.Fatalf("expected error when no sessions")
 	}
 
 	state.composeActive = true
 	handleComposeKey(ctx, &state, cfg, tcell.NewEventKey(tcell.KeyCtrlS, 0, tcell.ModNone))
-	if state.composeActive || !state.selectTarget {
-		t.Fatalf("composeActive/selectTarget = %v/%v", state.composeActive, state.selectTarget)
+	if state.composeActive || state.composeBuf != nil {
+		t.Fatalf("composeActive/composeBuf = %v/%v", state.composeActive, state.composeBuf)
 	}
 }
 

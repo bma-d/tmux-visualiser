@@ -80,9 +80,10 @@ Defaults are `-lines 500` and `-interval 1s`.
 - `j` / `k` or arrow keys: scroll focused session
 - `PageUp` / `PageDown`: scroll faster
 - `Home` / `End`: jump to top or bottom
-- `i`: compose input (multi-line; `Enter` inserts newline)
-- `Ctrl+S`: finish compose and choose target, `Enter` to send, click to send, `Esc` to cancel
-- When an update prompt appears: `U` to update, `I` to ignore for 7 days, `Esc` to dismiss
+- `i`: compose input (live send to focused pane; `Enter` inserts newline; `Ctrl+S` exits)
+- `s`: send a single key (press the key; `Ctrl+S` cancels)
+- `Esc` in modes sends Escape to tmux; use `Ctrl+S` to exit a mode
+- When an update prompt appears: `U` to update, `I` to ignore for 7 days, `Ctrl+S` to dismiss
 
 ## How it works
 

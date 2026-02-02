@@ -36,10 +36,6 @@ const (
 
 func handleUpdateKey(state *appState, ev *tcell.EventKey) (updateAction, bool) {
 	switch ev.Key() {
-	case tcell.KeyEsc:
-		state.updatePrompt = false
-		state.updateVersion = ""
-		return updateNone, true
 	case tcell.KeyEnter:
 		state.updatePrompt = false
 		return updateNow, true

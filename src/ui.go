@@ -24,8 +24,7 @@ func draw(screen tcell.Screen, state appState, cfg config) {
 	statusStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorLightGray)
 	contentStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
 	headStyle := tcell.StyleDefault.Foreground(tcell.ColorYellow).Background(tcell.ColorBlack).Bold(true)
-	focusHeadStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorYellow).Bold(true)
-	focusBorder := tcell.StyleDefault.Foreground(tcell.ColorYellow).Background(tcell.ColorBlack)
+	focusHeadStyle, focusBorder := focusStyles(state)
 
 	sessionNames := orderedSessionNames(state)
 	sessions := make([]sessionView, 0, len(sessionNames))
@@ -65,8 +64,6 @@ func draw(screen tcell.Screen, state appState, cfg config) {
 
 	if state.updatePrompt {
 		drawUpdateOverlay(screen, width, height, state)
-	} else if state.composeActive {
-		drawComposeOverlay(screen, width, height, state)
 	} else if state.selectTarget {
 		drawSelectOverlay(screen, width, height)
 	}
@@ -128,6 +125,23 @@ func drawCell(screen tcell.Screen, x0, y0, x1, y1 int, sess sessionView, headSty
 	}
 }
 
+func focusStyles(state appState) (tcell.Style, tcell.Style) {
+	modeColor := tcell.ColorYellow
+	switch {
+	case state.updatePrompt:
+		modeColor = tcell.ColorLightCyan
+	case state.composeActive:
+		modeColor = tcell.ColorLightGreen
+	case state.selectTarget:
+		modeColor = tcell.ColorRed
+	case state.sendKeyActive:
+		modeColor = tcell.ColorFuchsia
+	}
+	head := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(modeColor).Bold(true)
+	border := tcell.StyleDefault.Foreground(modeColor).Background(tcell.ColorBlack)
+	return head, border
+}
+
 func drawBox(screen tcell.Screen, x0, y0, x1, y1 int, style tcell.Style) {
 	w := x1 - x0
 	h := y1 - y0
@@ -187,16 +201,16 @@ func drawStatus(screen tcell.Screen, width, y int, style tcell.Style, state appS
 	}
 	label := fmt.Sprintf("sessions:%d | lines:%d | interval:%s | tab:focus j/k:scroll enter:attach i:compose s:send-key Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", sessionCount, cfg.lines, cfg.interval, mouseState)
 	if state.composeActive {
-		label = "compose: type freely (enter=newline) | Ctrl+S choose target | Esc cancel"
+		label = "compose (live): type to send | Enter newline | Ctrl+S exit"
 	}
 	if state.selectTarget {
-		label = "select target: click or Tab/Shift+Tab | Enter send | Esc cancel"
+		label = "select target: click or Tab/Shift+Tab | Enter send | Ctrl+S cancel"
 	}
 	if state.updatePrompt {
-		label = fmt.Sprintf("update available %s | U update | I ignore 7 days | Esc dismiss", state.updateVersion)
+		label = fmt.Sprintf("update available %s | U update | I ignore 7 days | Ctrl+S dismiss", state.updateVersion)
 	}
 	if state.sendKeyActive {
-		label = "send key: press key to send | Esc cancel"
+		label = "send key: press key to send | Ctrl+S cancel"
 	}
 	if state.lastErr != "" {
 		label = fmt.Sprintf("error: %s", state.lastErr)
@@ -233,7 +247,7 @@ func drawComposeOverlay(screen tcell.Screen, width, height int, state appState) 
 	textStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkSlateGray)
 
 	drawBox(screen, 0, y0, width, y1, boxStyle)
-	drawText(screen, 1, y0+1, width-2, "Compose: Ctrl+S choose target | Esc cancel | Enter newline", headStyle)
+	drawText(screen, 1, y0+1, width-2, "Compose (live): type to send | Enter newline | Ctrl+S exit", headStyle)
 
 	contentTop := y0 + 2
 	contentHeight := y1 - 1 - contentTop
@@ -260,7 +274,7 @@ func drawSelectOverlay(screen tcell.Screen, width, height int) {
 	}
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorYellow)
 	drawBox(screen, 0, 0, width, 3, boxStyle)
-	drawText(screen, 1, 1, width-2, "Select target: click or Tab/Shift+Tab | Enter send | Esc cancel", boxStyle)
+	drawText(screen, 1, 1, width-2, "Select target: click or Tab/Shift+Tab | Enter send | Ctrl+S cancel", boxStyle)
 }
 
 func drawUpdateOverlay(screen tcell.Screen, width, height int, state appState) {
@@ -271,6 +285,6 @@ func drawUpdateOverlay(screen tcell.Screen, width, height int, state appState) {
 	headStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorLightCyan).Bold(true)
 	drawBox(screen, 0, 0, width, 4, boxStyle)
 	drawText(screen, 1, 1, width-2, "Update available", headStyle)
-	msg := fmt.Sprintf("Latest: %s | U update | I ignore 7 days | Esc dismiss", state.updateVersion)
+	msg := fmt.Sprintf("Latest: %s | U update | I ignore 7 days | Ctrl+S dismiss", state.updateVersion)
 	drawText(screen, 1, 2, width-2, msg, boxStyle)
 }

@@ -114,6 +114,19 @@ func main() {
 				draw(screen, state, cfg)
 			case *tcell.EventKey:
 				if state.updatePrompt {
+					if tev.Key() == tcell.KeyEsc {
+						if err := sendKeyToFocused(ctx, &state, cfg, "Escape", false); err != nil {
+							state.lastErr = err.Error()
+						}
+						draw(screen, state, cfg)
+						break
+					}
+					if isCtrlS(tev) {
+						state.updatePrompt = false
+						state.updateVersion = ""
+						draw(screen, state, cfg)
+						break
+					}
 					action, handled := handleUpdateKey(&state, tev)
 					if handled {
 						if action == updateNow {
