@@ -32,7 +32,10 @@ func TestDiscoverSocketTargets(t *testing.T) {
 		},
 	}
 
-	targets := discoverSocketTargets(cfg)
+	targets, discoveryErrors := discoverSocketTargets(cfg)
+	if len(discoveryErrors) != 0 {
+		t.Fatalf("unexpected discoveryErrors: %v", discoveryErrors)
+	}
 	if len(targets) != 4 {
 		t.Fatalf("targets len = %d", len(targets))
 	}
@@ -41,6 +44,24 @@ func TestDiscoverSocketTargets(t *testing.T) {
 	want := []string{"", filepath.Clean(socketA), filepath.Clean(filepath.Join(tmpDir, "missing.sock")), filepath.Clean(socketB)}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverSocketTargetsInvalidGlob(t *testing.T) {
+	cfg := config{
+		includeLisaSockets: true,
+		socketGlob:         "[",
+	}
+
+	targets, discoveryErrors := discoverSocketTargets(cfg)
+	if len(targets) != 0 {
+		t.Fatalf("targets len = %d", len(targets))
+	}
+	if len(discoveryErrors) != 1 {
+		t.Fatalf("discoveryErrors len = %d", len(discoveryErrors))
+	}
+	if !strings.Contains(discoveryErrors[0], "socket-glob") {
+		t.Fatalf("discovery error = %q", discoveryErrors[0])
 	}
 }
 
@@ -165,6 +186,86 @@ func TestListSessionsReturnsPartialResultsWithFatalErrors(t *testing.T) {
 	}
 	if refs[0].key != sessionQualifiedKey("", "alpha") {
 		t.Fatalf("unexpected key = %q", refs[0].key)
+	}
+}
+
+func TestListSessionsReturnsPartialResultsWithTmuxPermissionError(t *testing.T) {
+	badSocket := "/tmp/private.sock"
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		if len(args) < 1 || args[0] != "list-sessions" {
+			return "", errors.New("unexpected command")
+		}
+		if socket == "" {
+			return "alpha", nil
+		}
+		if socket == badSocket {
+			return "", errors.New("error connecting to /tmp/private.sock (Permission denied)")
+		}
+		return "", errors.New("unknown socket")
+	}
+
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   false,
+		explicitSockets:      []string{badSocket},
+	}
+	refs, socketCount, err := listSessions(context.Background(), cfg)
+	if err == nil {
+		t.Fatalf("expected partial error")
+	}
+	if !strings.Contains(err.Error(), "partial socket failures") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "private: error connecting to /tmp/private.sock (Permission denied)") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if socketCount != 2 {
+		t.Fatalf("socketCount = %d", socketCount)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("refs len = %d", len(refs))
+	}
+	if refs[0].key != sessionQualifiedKey("", "alpha") {
+		t.Fatalf("unexpected key = %q", refs[0].key)
+	}
+}
+
+func TestListSessionsIncludesSocketGlobDiscoveryError(t *testing.T) {
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		if socket == "" && len(args) > 0 && args[0] == "list-sessions" {
+			return "alpha", nil
+		}
+		return "", errors.New("unexpected command")
+	}
+
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   true,
+		socketGlob:           "[",
+	}
+	refs, socketCount, err := listSessions(context.Background(), cfg)
+	if err == nil {
+		t.Fatalf("expected partial error")
+	}
+	if !strings.Contains(err.Error(), "partial socket failures") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "socket-glob") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if socketCount != 1 {
+		t.Fatalf("socketCount = %d", socketCount)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("refs len = %d", len(refs))
 	}
 }
 

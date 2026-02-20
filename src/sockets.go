@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,9 +10,10 @@ import (
 
 const defaultSocketKey = "default"
 
-func discoverSocketTargets(cfg config) []socketTarget {
+func discoverSocketTargets(cfg config) ([]socketTarget, []string) {
 	targets := make([]socketTarget, 0)
 	seen := make(map[string]struct{})
+	discoveryErrors := make([]string, 0)
 
 	add := func(path string, requireExists bool) {
 		raw := strings.TrimSpace(path)
@@ -48,7 +50,9 @@ func discoverSocketTargets(cfg config) []socketTarget {
 
 	if cfg.includeLisaSockets && strings.TrimSpace(cfg.socketGlob) != "" {
 		matches, err := filepath.Glob(cfg.socketGlob)
-		if err == nil {
+		if err != nil {
+			discoveryErrors = append(discoveryErrors, fmt.Sprintf("socket-glob %q: %v", cfg.socketGlob, err))
+		} else {
 			sort.Strings(matches)
 			for _, path := range matches {
 				add(path, true)
@@ -56,7 +60,7 @@ func discoverSocketTargets(cfg config) []socketTarget {
 		}
 	}
 
-	return targets
+	return targets, discoveryErrors
 }
 
 func makeSocketTarget(path string) socketTarget {
@@ -109,9 +113,11 @@ func isSocketUnavailableMessage(msg string) bool {
 	if text == "" {
 		return false
 	}
+	if strings.Contains(text, "permission denied") {
+		return false
+	}
 	return strings.Contains(text, "no server running") ||
 		strings.Contains(text, "failed to connect to server") ||
-		strings.Contains(text, "error connecting to") ||
 		strings.Contains(text, "connection refused") ||
 		strings.Contains(text, "no such file or directory")
 }

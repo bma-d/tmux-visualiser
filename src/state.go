@@ -124,13 +124,17 @@ func updateState(ctx context.Context, state *appState, cfg config) {
 }
 
 func listSessions(ctx context.Context, cfg config) ([]sessionRef, int, error) {
-	targets := discoverSocketTargets(cfg)
+	targets, discoveryErrors := discoverSocketTargets(cfg)
 	if len(targets) == 0 {
+		if len(discoveryErrors) > 0 {
+			sort.Strings(discoveryErrors)
+			return nil, 0, errors.New(strings.Join(discoveryErrors, " | "))
+		}
 		return nil, 0, errors.New("no tmux sockets configured")
 	}
 
 	merged := make([]sessionRef, 0)
-	fatalErrors := make([]string, 0)
+	fatalErrors := append([]string{}, discoveryErrors...)
 	unavailableTargets := make([]string, 0)
 	successCount := 0
 
