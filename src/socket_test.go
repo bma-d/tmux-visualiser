@@ -123,6 +123,106 @@ func TestListSessionsQualifiedKeyCollision(t *testing.T) {
 	}
 }
 
+func TestListSessionsReturnsPartialResultsWithFatalErrors(t *testing.T) {
+	badSocket := "/tmp/private.sock"
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		if len(args) < 1 || args[0] != "list-sessions" {
+			return "", errors.New("unexpected command")
+		}
+		if socket == "" {
+			return "alpha", nil
+		}
+		if socket == badSocket {
+			return "", errors.New("permission denied")
+		}
+		return "", errors.New("unknown socket")
+	}
+
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   false,
+		explicitSockets:      []string{badSocket},
+	}
+	refs, socketCount, err := listSessions(context.Background(), cfg)
+	if err == nil {
+		t.Fatalf("expected partial error")
+	}
+	if !strings.Contains(err.Error(), "partial socket failures") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "private: permission denied") {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if socketCount != 2 {
+		t.Fatalf("socketCount = %d", socketCount)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("refs len = %d", len(refs))
+	}
+	if refs[0].key != sessionQualifiedKey("", "alpha") {
+		t.Fatalf("unexpected key = %q", refs[0].key)
+	}
+}
+
+func TestUpdateStateKeepsPartialSessionsOnSocketError(t *testing.T) {
+	badSocket := "/tmp/private.sock"
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		switch args[0] {
+		case "list-sessions":
+			if socket == "" {
+				return "alpha", nil
+			}
+			if socket == badSocket {
+				return "", errors.New("permission denied")
+			}
+		case "list-panes":
+			if socket == "" {
+				return "1 %1", nil
+			}
+		case "capture-pane":
+			if socket == "" {
+				return "line1\n", nil
+			}
+		}
+		return "", errors.New("unexpected command")
+	}
+
+	state := appState{
+		sessions: map[string]sessionView{},
+		scroll:   map[string]int{},
+		follow:   map[string]bool{},
+	}
+	cfg := config{
+		lines:                50,
+		maxWorkers:           1,
+		includeDefaultSocket: true,
+		includeLisaSockets:   false,
+		explicitSockets:      []string{badSocket},
+	}
+	updateState(context.Background(), &state, cfg)
+
+	if state.serverDown {
+		t.Fatalf("serverDown should be false")
+	}
+	if !strings.Contains(state.lastErr, "partial socket failures") {
+		t.Fatalf("lastErr = %q", state.lastErr)
+	}
+	if len(state.sessions) != 1 {
+		t.Fatalf("sessions len = %d", len(state.sessions))
+	}
+	if _, ok := state.sessions[sessionQualifiedKey("", "alpha")]; !ok {
+		t.Fatalf("missing default alpha session")
+	}
+}
+
 func TestSocketUsedForListPaneCapture(t *testing.T) {
 	socketPath := "/tmp/test.sock"
 	calls := make([]string, 0)

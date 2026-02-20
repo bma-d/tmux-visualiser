@@ -16,7 +16,7 @@ func updateState(ctx context.Context, state *appState, cfg config) {
 	state.socketCount = socketCount
 	if err != nil {
 		state.lastErr = err.Error()
-		if isSocketUnavailableError(err) {
+		if refs == nil && isSocketUnavailableError(err) {
 			state.serverDown = true
 			state.sessions = map[string]sessionView{}
 			state.scroll = map[string]int{}
@@ -25,10 +25,13 @@ func updateState(ctx context.Context, state *appState, cfg config) {
 			state.focusName = ""
 			return
 		}
-		state.serverDown = false
-		return
+		if refs == nil {
+			state.serverDown = false
+			return
+		}
+	} else {
+		state.lastErr = ""
 	}
-	state.lastErr = ""
 	state.serverDown = false
 
 	newSessions := make(map[string]sessionView, len(refs))
@@ -152,6 +155,10 @@ func listSessions(ctx context.Context, cfg config) ([]sessionRef, int, error) {
 			}
 			return merged[i].name < merged[j].name
 		})
+		if len(fatalErrors) > 0 {
+			sort.Strings(fatalErrors)
+			return merged, len(targets), errors.New("partial socket failures: " + strings.Join(fatalErrors, " | "))
+		}
 		return merged, len(targets), nil
 	}
 

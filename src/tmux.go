@@ -57,7 +57,10 @@ func runTmuxInteractiveOnSocket(socket string, args ...string) error {
 
 func tmuxArgs(socket string, args ...string) []string {
 	if strings.TrimSpace(socket) == "" {
-		return args
+		withDefault := make([]string, 0, len(args)+2)
+		withDefault = append(withDefault, "-L", defaultSocketKey)
+		withDefault = append(withDefault, args...)
+		return withDefault
 	}
 	withSocket := make([]string, 0, len(args)+2)
 	withSocket = append(withSocket, "-S", socket)
@@ -70,12 +73,12 @@ func canSwitchClient(socket string) bool {
 	if tmuxEnv == "" {
 		return false
 	}
-	if strings.TrimSpace(socket) == "" {
-		return true
-	}
 	currentSocket := tmuxSocketFromEnv(tmuxEnv)
 	if currentSocket == "" {
 		return false
+	}
+	if strings.TrimSpace(socket) == "" {
+		return isDefaultSocketPath(currentSocket)
 	}
 	return socketKey(socket) == socketKey(currentSocket)
 }
@@ -104,4 +107,25 @@ func envWithoutTMUX(env []string) []string {
 		filtered = append(filtered, item)
 	}
 	return filtered
+}
+
+func isDefaultSocketPath(path string) bool {
+	clean := filepath.Clean(strings.TrimSpace(path))
+	if clean == "" || filepath.Base(clean) != defaultSocketKey {
+		return false
+	}
+	parent := filepath.Base(filepath.Dir(clean))
+	if !strings.HasPrefix(parent, "tmux-") {
+		return false
+	}
+	suffix := strings.TrimPrefix(parent, "tmux-")
+	if suffix == "" {
+		return false
+	}
+	for _, r := range suffix {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
