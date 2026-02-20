@@ -42,6 +42,10 @@ func discoverSocketTargets(cfg config) ([]socketTarget, []string) {
 
 	if cfg.includeDefaultSocket {
 		add("", false)
+		envSocket := tmuxSocketFromEnv(os.Getenv("TMUX"))
+		if envSocket != "" && !isDefaultSocketPath(envSocket) {
+			add(envSocket, false)
+		}
 	}
 
 	for _, path := range cfg.explicitSockets {

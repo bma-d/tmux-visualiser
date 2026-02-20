@@ -11,6 +11,8 @@ import (
 )
 
 func TestDiscoverSocketTargets(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	tmpDir := t.TempDir()
 	socketA := filepath.Join(tmpDir, "a.sock")
 	socketB := filepath.Join(tmpDir, "b.sock")
@@ -48,6 +50,8 @@ func TestDiscoverSocketTargets(t *testing.T) {
 }
 
 func TestDiscoverSocketTargetsInvalidGlob(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	cfg := config{
 		includeLisaSockets: true,
 		socketGlob:         "[",
@@ -66,6 +70,8 @@ func TestDiscoverSocketTargetsInvalidGlob(t *testing.T) {
 }
 
 func TestListSessionsReportsUnavailableSocketHints(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	missingSocket := "/tmp/missing-explicit.sock"
 	origRun := runTmuxOnSocketFn
 	t.Cleanup(func() {
@@ -93,6 +99,8 @@ func TestListSessionsReportsUnavailableSocketHints(t *testing.T) {
 }
 
 func TestListSessionsQualifiedKeyCollision(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	tmpDir := t.TempDir()
 	socketA := filepath.Join(tmpDir, "project.sock")
 	if err := os.WriteFile(socketA, []byte("x"), 0o600); err != nil {
@@ -145,6 +153,8 @@ func TestListSessionsQualifiedKeyCollision(t *testing.T) {
 }
 
 func TestListSessionsReturnsPartialResultsWithFatalErrors(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	badSocket := "/tmp/private.sock"
 	origRun := runTmuxOnSocketFn
 	t.Cleanup(func() {
@@ -190,6 +200,8 @@ func TestListSessionsReturnsPartialResultsWithFatalErrors(t *testing.T) {
 }
 
 func TestListSessionsReturnsPartialResultsWithTmuxPermissionError(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	badSocket := "/tmp/private.sock"
 	origRun := runTmuxOnSocketFn
 	t.Cleanup(func() {
@@ -235,6 +247,8 @@ func TestListSessionsReturnsPartialResultsWithTmuxPermissionError(t *testing.T) 
 }
 
 func TestListSessionsIncludesSocketGlobDiscoveryError(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	origRun := runTmuxOnSocketFn
 	t.Cleanup(func() {
 		runTmuxOnSocketFn = origRun
@@ -270,6 +284,8 @@ func TestListSessionsIncludesSocketGlobDiscoveryError(t *testing.T) {
 }
 
 func TestUpdateStateKeepsPartialSessionsOnSocketError(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	badSocket := "/tmp/private.sock"
 	origRun := runTmuxOnSocketFn
 	t.Cleanup(func() {
@@ -325,6 +341,8 @@ func TestUpdateStateKeepsPartialSessionsOnSocketError(t *testing.T) {
 }
 
 func TestSocketUsedForListPaneCapture(t *testing.T) {
+	t.Setenv("TMUX", "")
+
 	socketPath := "/tmp/test.sock"
 	calls := make([]string, 0)
 
@@ -377,5 +395,67 @@ func TestSocketUsedForListPaneCapture(t *testing.T) {
 		if !strings.HasPrefix(call, socketPath+"|") {
 			t.Fatalf("socket mismatch call: %q", call)
 		}
+	}
+}
+
+func TestDiscoverSocketTargetsIncludesCurrentTMUXSocket(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/lisa-a.sock,17,0")
+
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   false,
+	}
+
+	targets, discoveryErrors := discoverSocketTargets(cfg)
+	if len(discoveryErrors) != 0 {
+		t.Fatalf("unexpected discoveryErrors: %v", discoveryErrors)
+	}
+	if len(targets) != 2 {
+		t.Fatalf("targets len = %d", len(targets))
+	}
+	if targets[0].path != "" {
+		t.Fatalf("expected first target to be default, got %q", targets[0].path)
+	}
+	if targets[1].path != "/tmp/lisa-a.sock" {
+		t.Fatalf("expected env socket target, got %q", targets[1].path)
+	}
+}
+
+func TestListSessionsFallsBackToCurrentTMUXSocket(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/lisa-b.sock,1,0")
+
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		if len(args) < 1 || args[0] != "list-sessions" {
+			return "", errors.New("unexpected command")
+		}
+		if socket == "" {
+			return "", errors.New("no server running on /tmp/tmux-1000/default")
+		}
+		if socket == "/tmp/lisa-b.sock" {
+			return "alpha", nil
+		}
+		return "", errors.New("unknown socket")
+	}
+
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   false,
+	}
+	refs, socketCount, err := listSessions(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("listSessions err: %v", err)
+	}
+	if socketCount != 2 {
+		t.Fatalf("socketCount = %d", socketCount)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("refs len = %d", len(refs))
+	}
+	if refs[0].key != sessionQualifiedKey("/tmp/lisa-b.sock", "alpha") {
+		t.Fatalf("unexpected key = %q", refs[0].key)
 	}
 }
