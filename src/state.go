@@ -128,14 +128,14 @@ func listSessions(ctx context.Context, cfg config) ([]sessionRef, int, error) {
 
 	merged := make([]sessionRef, 0)
 	fatalErrors := make([]string, 0)
-	unavailableCount := 0
+	unavailableTargets := make([]string, 0)
 	successCount := 0
 
 	for _, target := range targets {
 		refs, err := listSessionsOnSocket(ctx, cfg, target)
 		if err != nil {
 			if isSocketUnavailableError(err) {
-				unavailableCount++
+				unavailableTargets = append(unavailableTargets, target.hint)
 				continue
 			}
 			fatalErrors = append(fatalErrors, fmt.Sprintf("%s: %v", target.hint, err))
@@ -159,8 +159,9 @@ func listSessions(ctx context.Context, cfg config) ([]sessionRef, int, error) {
 		sort.Strings(fatalErrors)
 		return nil, len(targets), errors.New(strings.Join(fatalErrors, " | "))
 	}
-	if unavailableCount > 0 {
-		return nil, len(targets), errors.New("no server running on discovered sockets")
+	if len(unavailableTargets) > 0 {
+		sort.Strings(unavailableTargets)
+		return nil, len(targets), errors.New("no server running on discovered sockets: " + strings.Join(unavailableTargets, ", "))
 	}
 
 	return []sessionRef{}, len(targets), nil

@@ -33,14 +33,41 @@ func TestDiscoverSocketTargets(t *testing.T) {
 	}
 
 	targets := discoverSocketTargets(cfg)
-	if len(targets) != 3 {
+	if len(targets) != 4 {
 		t.Fatalf("targets len = %d", len(targets))
 	}
 
-	got := []string{targets[0].path, targets[1].path, targets[2].path}
-	want := []string{"", filepath.Clean(socketA), filepath.Clean(socketB)}
+	got := []string{targets[0].path, targets[1].path, targets[2].path, targets[3].path}
+	want := []string{"", filepath.Clean(socketA), filepath.Clean(filepath.Join(tmpDir, "missing.sock")), filepath.Clean(socketB)}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestListSessionsReportsUnavailableSocketHints(t *testing.T) {
+	missingSocket := "/tmp/missing-explicit.sock"
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, _ string, _ ...string) (string, error) {
+		return "", errors.New("failed to connect to server")
+	}
+
+	cfg := config{
+		includeDefaultSocket: false,
+		includeLisaSockets:   false,
+		explicitSockets:      []string{missingSocket},
+	}
+	_, socketCount, err := listSessions(context.Background(), cfg)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if socketCount != 1 {
+		t.Fatalf("socketCount = %d", socketCount)
+	}
+	if !strings.Contains(err.Error(), "missing-explicit") {
+		t.Fatalf("error = %q", err.Error())
 	}
 }
 

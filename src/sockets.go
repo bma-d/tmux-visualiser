@@ -43,7 +43,7 @@ func discoverSocketTargets(cfg config) []socketTarget {
 	}
 
 	for _, path := range cfg.explicitSockets {
-		add(path, true)
+		add(path, false)
 	}
 
 	if cfg.includeLisaSockets && strings.TrimSpace(cfg.socketGlob) != "" {

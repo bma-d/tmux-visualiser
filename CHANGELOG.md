@@ -14,6 +14,11 @@ All notable changes to this project will be documented in this file.
 - Changed refresh, capture, send, kill, and attach flows to always route actions to the correct tmux socket.
 - Changed UI labels to show socket hints per session and socket/session totals in the status bar.
 
+### Fixed
+- Fixed explicit `-socket` targets being silently dropped when the socket file is missing; they are now preserved and surfaced in unavailable-socket errors.
+- Fixed attach routing inside tmux to use `switch-client` only for the current socket and use interactive attach for cross-socket targets.
+- Fixed interactive attach inheriting `TMUX`, which could block cross-socket attach flows.
+
 ## [1.1.0] - 2026-02-02
 ### Added
 - Mode-specific focus colors for the focused pane to show active mode.

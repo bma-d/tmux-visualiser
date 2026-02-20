@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -47,6 +48,7 @@ func runTmuxInteractive(args ...string) error {
 
 func runTmuxInteractiveOnSocket(socket string, args ...string) error {
 	cmd := exec.Command("tmux", tmuxArgs(socket, args...)...)
+	cmd.Env = envWithoutTMUX(os.Environ())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -61,4 +63,45 @@ func tmuxArgs(socket string, args ...string) []string {
 	withSocket = append(withSocket, "-S", socket)
 	withSocket = append(withSocket, args...)
 	return withSocket
+}
+
+func canSwitchClient(socket string) bool {
+	tmuxEnv := strings.TrimSpace(os.Getenv("TMUX"))
+	if tmuxEnv == "" {
+		return false
+	}
+	if strings.TrimSpace(socket) == "" {
+		return true
+	}
+	currentSocket := tmuxSocketFromEnv(tmuxEnv)
+	if currentSocket == "" {
+		return false
+	}
+	return socketKey(socket) == socketKey(currentSocket)
+}
+
+func tmuxSocketFromEnv(value string) string {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return ""
+	}
+	if comma := strings.Index(raw, ","); comma >= 0 {
+		raw = raw[:comma]
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	return filepath.Clean(raw)
+}
+
+func envWithoutTMUX(env []string) []string {
+	filtered := make([]string, 0, len(env))
+	for _, item := range env {
+		if strings.HasPrefix(item, "TMUX=") {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
 }

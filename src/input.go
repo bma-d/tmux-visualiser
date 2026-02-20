@@ -345,7 +345,7 @@ func connectFocused(ctx context.Context, state *appState, cfg config, screen tce
 		}
 	}
 
-	if os.Getenv("TMUX") != "" {
+	if canSwitchClient(sess.socketPath) {
 		if _, err := runTmuxOnSocketFn(ctx, cfg, sess.socketPath, "switch-client", "-t", sess.name, ";", "select-pane", "-t", paneID); err != nil {
 			return false, err
 		}

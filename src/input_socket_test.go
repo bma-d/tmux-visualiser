@@ -63,7 +63,7 @@ func TestActionRoutingUsesSessionSocket(t *testing.T) {
 	}
 }
 
-func TestConnectFocusedUsesSocketForSwitchAndAttach(t *testing.T) {
+func TestConnectFocusedUsesSwitchOnlyForCurrentSocket(t *testing.T) {
 	socketPath := "/tmp/lisa-b.sock"
 	sessionKey := sessionQualifiedKey(socketPath, "beta")
 	base := tcell.NewSimulationScreen("UTF-8")
@@ -100,7 +100,7 @@ func TestConnectFocusedUsesSocketForSwitchAndAttach(t *testing.T) {
 		switchCall = socket + "|" + strings.Join(args, " ")
 		return "", nil
 	}
-	t.Setenv("TMUX", "1")
+	t.Setenv("TMUX", socketPath+",1,0")
 	exit, err := connectFocused(context.Background(), &state, cfg, screen)
 	if err != nil {
 		t.Fatalf("connectFocused switch err: %v", err)
@@ -111,13 +111,17 @@ func TestConnectFocusedUsesSocketForSwitchAndAttach(t *testing.T) {
 	if !strings.Contains(switchCall, socketPath+"|switch-client -t beta ; select-pane -t %4") {
 		t.Fatalf("switchCall = %q", switchCall)
 	}
+	if screen.suspended {
+		t.Fatalf("screen should not suspend for switch-client")
+	}
 
 	var attachCall string
 	runTmuxInteractiveOnSocketFn = func(socket string, args ...string) error {
 		attachCall = socket + "|" + strings.Join(args, " ")
 		return nil
 	}
-	t.Setenv("TMUX", "")
+	screen.suspended = false
+	t.Setenv("TMUX", "/tmp/other.sock,2,0")
 	exit, err = connectFocused(context.Background(), &state, cfg, screen)
 	if err != nil {
 		t.Fatalf("connectFocused attach err: %v", err)
