@@ -137,12 +137,12 @@ func sendComposeToFocused(ctx context.Context, state *appState, cfg config) erro
 	if state.focusIndex < 0 || state.focusIndex >= len(names) {
 		state.focusIndex = 0
 	}
-	name := names[state.focusIndex]
-	sess := state.sessions[name]
+	key := names[state.focusIndex]
+	sess := state.sessions[key]
 	paneID := sess.paneID
 	if paneID == "" {
 		var err error
-		paneID, err = activePaneID(ctx, cfg, name)
+		paneID, err = activePaneID(ctx, cfg, sess.socketPath, sess.name)
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func sendComposeToFocused(ctx context.Context, state *appState, cfg config) erro
 		state.composeBuf = nil
 		return nil
 	}
-	if err := sendKeysToPane(ctx, cfg, paneID, text); err != nil {
+	if err := sendKeysToPane(ctx, cfg, sess.socketPath, paneID, text); err != nil {
 		return err
 	}
 	state.selectTarget = false
@@ -161,16 +161,16 @@ func sendComposeToFocused(ctx context.Context, state *appState, cfg config) erro
 	return nil
 }
 
-func sendKeysToPane(ctx context.Context, cfg config, paneID string, text string) error {
+func sendKeysToPane(ctx context.Context, cfg config, socketPath string, paneID string, text string) error {
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		if line != "" {
-			if _, err := runTmux(ctx, cfg, "send-keys", "-t", paneID, "-l", line); err != nil {
+			if _, err := runTmuxOnSocketFn(ctx, cfg, socketPath, "send-keys", "-t", paneID, "-l", line); err != nil {
 				return err
 			}
 		}
 		if i < len(lines)-1 {
-			if _, err := runTmux(ctx, cfg, "send-keys", "-t", paneID, "Enter"); err != nil {
+			if _, err := runTmuxOnSocketFn(ctx, cfg, socketPath, "send-keys", "-t", paneID, "Enter"); err != nil {
 				return err
 			}
 		}
@@ -186,8 +186,9 @@ func killFocusedSession(ctx context.Context, state *appState, cfg config) error 
 	if state.focusIndex < 0 || state.focusIndex >= len(names) {
 		state.focusIndex = 0
 	}
-	name := names[state.focusIndex]
-	if _, err := runTmux(ctx, cfg, "kill-session", "-t", name); err != nil {
+	key := names[state.focusIndex]
+	sess := state.sessions[key]
+	if _, err := runTmuxOnSocketFn(ctx, cfg, sess.socketPath, "kill-session", "-t", sess.name); err != nil {
 		return err
 	}
 	state.focusName = ""
@@ -307,20 +308,21 @@ func sendKeyToFocused(ctx context.Context, state *appState, cfg config, key stri
 	if state.focusIndex < 0 || state.focusIndex >= len(names) {
 		state.focusIndex = 0
 	}
-	name := names[state.focusIndex]
-	paneID := state.sessions[name].paneID
+	keyName := names[state.focusIndex]
+	sess := state.sessions[keyName]
+	paneID := sess.paneID
 	if paneID == "" {
 		var err error
-		paneID, err = activePaneID(ctx, cfg, name)
+		paneID, err = activePaneID(ctx, cfg, sess.socketPath, sess.name)
 		if err != nil {
 			return err
 		}
 	}
 	if literal {
-		_, err := runTmux(ctx, cfg, "send-keys", "-t", paneID, "-l", key)
+		_, err := runTmuxOnSocketFn(ctx, cfg, sess.socketPath, "send-keys", "-t", paneID, "-l", key)
 		return err
 	}
-	_, err := runTmux(ctx, cfg, "send-keys", "-t", paneID, key)
+	_, err := runTmuxOnSocketFn(ctx, cfg, sess.socketPath, "send-keys", "-t", paneID, key)
 	return err
 }
 
@@ -332,18 +334,19 @@ func connectFocused(ctx context.Context, state *appState, cfg config, screen tce
 	if state.focusIndex < 0 || state.focusIndex >= len(names) {
 		state.focusIndex = 0
 	}
-	name := names[state.focusIndex]
-	paneID := state.sessions[name].paneID
+	key := names[state.focusIndex]
+	sess := state.sessions[key]
+	paneID := sess.paneID
 	if paneID == "" {
 		var err error
-		paneID, err = activePaneID(ctx, cfg, name)
+		paneID, err = activePaneID(ctx, cfg, sess.socketPath, sess.name)
 		if err != nil {
 			return false, err
 		}
 	}
 
 	if os.Getenv("TMUX") != "" {
-		if _, err := runTmux(ctx, cfg, "switch-client", "-t", name, ";", "select-pane", "-t", paneID); err != nil {
+		if _, err := runTmuxOnSocketFn(ctx, cfg, sess.socketPath, "switch-client", "-t", sess.name, ";", "select-pane", "-t", paneID); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -352,7 +355,7 @@ func connectFocused(ctx context.Context, state *appState, cfg config, screen tce
 	if err := screen.Suspend(); err != nil {
 		return false, err
 	}
-	if err := runTmuxInteractive("attach-session", "-t", name, ";", "select-pane", "-t", paneID); err != nil {
+	if err := runTmuxInteractiveOnSocketFn(sess.socketPath, "attach-session", "-t", sess.name, ";", "select-pane", "-t", paneID); err != nil {
 		fmt.Fprintln(os.Stderr, "tmux attach failed:", err)
 		return true, err
 	}

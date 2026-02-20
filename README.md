@@ -61,7 +61,11 @@ Download the archive for your OS/arch from the Releases page and extract it to a
 Optional flags:
 
 ```bash
-go run ./src -lines 300 -interval 500ms -cmd-timeout 1s -workers 4
+go run ./src -lines 300 -interval 500ms -cmd-timeout 1s -workers 4 \
+  -include-default-socket=true \
+  -include-lisa-sockets=true \
+  -socket /tmp/custom.sock \
+  -socket-glob '/tmp/lisa-tmux-*-*.sock'
 ```
 
 Defaults are `-lines 500` and `-interval 1s`.
@@ -87,16 +91,28 @@ Defaults are `-lines 500` and `-interval 1s`.
 
 ## How it works
 
-- Polls `tmux list-sessions` to discover sessions.
-- For each session, finds the active pane.
+- Discovers sockets from:
+  - default tmux socket (enabled by `-include-default-socket`)
+  - explicit `-socket` flags (repeatable)
+  - glob matches from `-socket-glob` (enabled by `-include-lisa-sockets`)
+- Polls each socket via `tmux -S <socket> list-sessions`.
+- For each session, finds the active pane on that same socket.
 - Captures the last N lines from that pane.
 - Lays out sessions in a grid that fills your terminal.
 
 ## Notes
 
 - If no tmux server is running, the UI shows a message and keeps polling.
+- Stale/missing Lisa sockets are ignored and do not stop refresh.
+- Session identity is socket-qualified, so duplicate session names across sockets are shown independently.
 - The refresh interval is clamped to avoid excessive CPU usage.
 - Captured output is bounded, so memory stays stable.
+
+## Troubleshooting
+
+- Lisa uses per-project tmux sockets. If your Lisa sessions are missing, verify:
+  - `-include-lisa-sockets=true`
+  - `-socket-glob` matches your Lisa socket pattern
 
 ## Changelog
 

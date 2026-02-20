@@ -11,13 +11,18 @@ import (
 )
 
 func updateState(ctx context.Context, state *appState, cfg config) {
-	names, err := listSessions(ctx, cfg)
+	refs, socketCount, err := listSessions(ctx, cfg)
 	state.lastRefresh = time.Now()
+	state.socketCount = socketCount
 	if err != nil {
 		state.lastErr = err.Error()
-		if strings.Contains(strings.ToLower(err.Error()), "no server running") {
+		if isSocketUnavailableError(err) {
 			state.serverDown = true
 			state.sessions = map[string]sessionView{}
+			state.scroll = map[string]int{}
+			state.follow = map[string]bool{}
+			state.focusIndex = 0
+			state.focusName = ""
 			return
 		}
 		state.serverDown = false
@@ -26,10 +31,10 @@ func updateState(ctx context.Context, state *appState, cfg config) {
 	state.lastErr = ""
 	state.serverDown = false
 
-	newSessions := make(map[string]sessionView, len(names))
-	keepScroll := make(map[string]int, len(names))
-	keepFollow := make(map[string]bool, len(names))
-	if len(names) == 0 {
+	newSessions := make(map[string]sessionView, len(refs))
+	keepScroll := make(map[string]int, len(refs))
+	keepFollow := make(map[string]bool, len(refs))
+	if len(refs) == 0 {
 		state.sessions = newSessions
 		state.scroll = keepScroll
 		state.follow = keepFollow
@@ -39,83 +44,154 @@ func updateState(ctx context.Context, state *appState, cfg config) {
 	}
 
 	workers := cfg.maxWorkers
-	if workers > len(names) {
-		workers = len(names)
+	if workers > len(refs) {
+		workers = len(refs)
 	}
 	sem := make(chan struct{}, workers)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for _, name := range names {
-		name := name
+	for _, ref := range refs {
+		ref := ref
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			paneID, err := activePaneID(ctx, cfg, name)
+			paneID, err := activePaneID(ctx, cfg, ref.socket.path, ref.name)
 			if err != nil {
 				mu.Lock()
-				newSessions[name] = sessionView{name: name, paneID: "", lines: []string{err.Error()}, updated: time.Now()}
+				newSessions[ref.key] = sessionView{
+					key:        ref.key,
+					name:       ref.name,
+					socketPath: ref.socket.path,
+					socketHint: ref.socket.hint,
+					paneID:     "",
+					lines:      []string{err.Error()},
+					updated:    time.Now(),
+				}
 				mu.Unlock()
 				return
 			}
 
-			lines, err := capturePane(ctx, cfg, paneID, cfg.lines)
+			lines, err := capturePane(ctx, cfg, ref.socket.path, paneID, cfg.lines)
 			if err != nil {
 				lines = []string{err.Error()}
 			}
 
 			mu.Lock()
-			newSessions[name] = sessionView{name: name, paneID: paneID, lines: lines, updated: time.Now()}
+			newSessions[ref.key] = sessionView{
+				key:        ref.key,
+				name:       ref.name,
+				socketPath: ref.socket.path,
+				socketHint: ref.socket.hint,
+				paneID:     paneID,
+				lines:      lines,
+				updated:    time.Now(),
+			}
 			mu.Unlock()
 		}()
 	}
 
 	wg.Wait()
 	state.sessions = newSessions
-	for _, name := range names {
-		keepScroll[name] = state.scroll[name]
-		if _, ok := state.follow[name]; ok {
-			keepFollow[name] = state.follow[name]
+	for _, ref := range refs {
+		key := ref.key
+		keepScroll[key] = state.scroll[key]
+		if _, ok := state.follow[key]; ok {
+			keepFollow[key] = state.follow[key]
 		} else {
-			keepFollow[name] = true
+			keepFollow[key] = true
 		}
 	}
 	state.scroll = keepScroll
 	state.follow = keepFollow
-	state.focusIndex = focusIndexForName(names, state.focusName)
-	if state.focusIndex < 0 || state.focusIndex >= len(names) {
+	keys := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		keys = append(keys, ref.key)
+	}
+	state.focusIndex = focusIndexForName(keys, state.focusName)
+	if state.focusIndex < 0 || state.focusIndex >= len(keys) {
 		state.focusIndex = 0
-		state.focusName = names[0]
+		state.focusName = keys[0]
 	} else {
-		state.focusName = names[state.focusIndex]
+		state.focusName = keys[state.focusIndex]
 	}
 }
 
-func listSessions(ctx context.Context, cfg config) ([]string, error) {
-	out, err := runTmux(ctx, cfg, "list-sessions", "-F", "#S")
+func listSessions(ctx context.Context, cfg config) ([]sessionRef, int, error) {
+	targets := discoverSocketTargets(cfg)
+	if len(targets) == 0 {
+		return nil, 0, errors.New("no tmux sockets configured")
+	}
+
+	merged := make([]sessionRef, 0)
+	fatalErrors := make([]string, 0)
+	unavailableCount := 0
+	successCount := 0
+
+	for _, target := range targets {
+		refs, err := listSessionsOnSocket(ctx, cfg, target)
+		if err != nil {
+			if isSocketUnavailableError(err) {
+				unavailableCount++
+				continue
+			}
+			fatalErrors = append(fatalErrors, fmt.Sprintf("%s: %v", target.hint, err))
+			continue
+		}
+		successCount++
+		merged = append(merged, refs...)
+	}
+
+	if successCount > 0 {
+		sort.Slice(merged, func(i, j int) bool {
+			if merged[i].name == merged[j].name {
+				return merged[i].socket.key < merged[j].socket.key
+			}
+			return merged[i].name < merged[j].name
+		})
+		return merged, len(targets), nil
+	}
+
+	if len(fatalErrors) > 0 {
+		sort.Strings(fatalErrors)
+		return nil, len(targets), errors.New(strings.Join(fatalErrors, " | "))
+	}
+	if unavailableCount > 0 {
+		return nil, len(targets), errors.New("no server running on discovered sockets")
+	}
+
+	return []sessionRef{}, len(targets), nil
+}
+
+func listSessionsOnSocket(ctx context.Context, cfg config, target socketTarget) ([]sessionRef, error) {
+	out, err := runTmuxOnSocketFn(ctx, cfg, target.path, "list-sessions", "-F", "#S")
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(out) == "" {
-		return []string{}, nil
+		return []sessionRef{}, nil
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	sessions := make([]string, 0, len(lines))
+	refs := make([]sessionRef, 0, len(lines))
 	for _, line := range lines {
-		name := strings.TrimSpace(line)
-		if name != "" {
-			sessions = append(sessions, name)
+		sessionName := strings.TrimSpace(line)
+		if sessionName == "" {
+			continue
 		}
+		refs = append(refs, sessionRef{
+			key:    sessionQualifiedKey(target.path, sessionName),
+			name:   sessionName,
+			socket: target,
+		})
 	}
-	sort.Strings(sessions)
-	return sessions, nil
+	return refs, nil
 }
 
-func activePaneID(ctx context.Context, cfg config, session string) (string, error) {
-	out, err := runTmux(ctx, cfg, "list-panes", "-t", session, "-F", "#{pane_active} #{pane_id}")
+func activePaneID(ctx context.Context, cfg config, socketPath string, session string) (string, error) {
+	out, err := runTmuxOnSocketFn(ctx, cfg, socketPath, "list-panes", "-t", session, "-F", "#{pane_active} #{pane_id}")
 	if err != nil {
 		return "", err
 	}
@@ -138,12 +214,12 @@ func activePaneID(ctx context.Context, cfg config, session string) (string, erro
 	return fallback, nil
 }
 
-func capturePane(ctx context.Context, cfg config, paneID string, lines int) ([]string, error) {
+func capturePane(ctx context.Context, cfg config, socketPath string, paneID string, lines int) ([]string, error) {
 	if lines < 1 {
 		lines = 1
 	}
 	rangeArg := fmt.Sprintf("-%d", lines)
-	out, err := runTmux(ctx, cfg, "capture-pane", "-t", paneID, "-p", "-e", "-S", rangeArg)
+	out, err := runTmuxOnSocketFn(ctx, cfg, socketPath, "capture-pane", "-t", paneID, "-p", "-e", "-S", rangeArg)
 	if err != nil {
 		return nil, err
 	}

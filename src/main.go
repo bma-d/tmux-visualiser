@@ -16,12 +16,20 @@ var (
 )
 
 func main() {
-	cfg := config{}
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   true,
+		socketGlob:           "/tmp/lisa-tmux-*-*.sock",
+	}
 	showVersion := false
 	flag.IntVar(&cfg.lines, "lines", 500, "number of lines to capture per session")
 	flag.DurationVar(&cfg.interval, "interval", 1*time.Second, "refresh interval")
 	flag.DurationVar(&cfg.cmdTimeout, "cmd-timeout", 900*time.Millisecond, "timeout for each tmux command")
 	flag.IntVar(&cfg.maxWorkers, "workers", 4, "max concurrent tmux capture workers")
+	flag.BoolVar(&cfg.includeDefaultSocket, "include-default-socket", true, "include tmux default socket")
+	flag.BoolVar(&cfg.includeLisaSockets, "include-lisa-sockets", true, "include lisa sockets from socket-glob")
+	flag.StringVar(&cfg.socketGlob, "socket-glob", "/tmp/lisa-tmux-*-*.sock", "glob used to discover lisa sockets")
+	flag.Var((*stringSliceFlag)(&cfg.explicitSockets), "socket", "explicit tmux socket path (repeatable)")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&showVersion, "v", false, "print version and exit (shorthand)")
 	flag.Parse()

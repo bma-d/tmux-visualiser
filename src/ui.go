@@ -58,7 +58,7 @@ func draw(screen tcell.Screen, state appState, cfg config) {
 				cellHead = focusHeadStyle
 				cellBorder = focusBorder
 			}
-			drawCell(screen, x0, y0, x1, y1, sess, cellHead, contentStyle, cellBorder, state.scroll[sess.name], state.follow[sess.name])
+			drawCell(screen, x0, y0, x1, y1, sess, cellHead, contentStyle, cellBorder, state.scroll[sess.key], state.follow[sess.key])
 		}
 	}
 
@@ -84,8 +84,11 @@ func drawCell(screen tcell.Screen, x0, y0, x1, y1 int, sess sessionView, headSty
 	drawBox(screen, x0, y0, x1, y1, borderStyle)
 
 	title := sess.name
+	if sess.socketHint != "" {
+		title = fmt.Sprintf("%s [%s]", title, sess.socketHint)
+	}
 	if sess.paneID != "" {
-		title = fmt.Sprintf("%s (%s)", sess.name, sess.paneID)
+		title = fmt.Sprintf("%s (%s)", title, sess.paneID)
 	}
 	if h > 2 {
 		drawText(screen, x0+1, y0+1, w-2, title, headStyle)
@@ -199,21 +202,22 @@ func drawStatus(screen tcell.Screen, width, y int, style tcell.Style, state appS
 	if state.mouseEnabled {
 		mouseState = "on"
 	}
-	label := fmt.Sprintf("sessions:%d | lines:%d | interval:%s | tab:focus j/k:scroll enter:attach i:compose s:send-key Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", sessionCount, cfg.lines, cfg.interval, mouseState)
+	prefix := fmt.Sprintf("sockets:%d | sessions:%d | ", state.socketCount, sessionCount)
+	label := fmt.Sprintf("%slines:%d | interval:%s | tab:focus j/k:scroll enter:attach i:compose s:send-key Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", prefix, cfg.lines, cfg.interval, mouseState)
 	if state.composeActive {
-		label = "compose (live): type to send | Enter newline | Ctrl+S exit"
+		label = prefix + "compose (live): type to send | Enter newline | Ctrl+S exit"
 	}
 	if state.selectTarget {
-		label = "select target: click or Tab/Shift+Tab | Enter send | Ctrl+S cancel"
+		label = prefix + "select target: click or Tab/Shift+Tab | Enter send | Ctrl+S cancel"
 	}
 	if state.updatePrompt {
-		label = fmt.Sprintf("update available %s | U update | I ignore 7 days | Ctrl+S dismiss", state.updateVersion)
+		label = fmt.Sprintf("%supdate available %s | U update | I ignore 7 days | Ctrl+S dismiss", prefix, state.updateVersion)
 	}
 	if state.sendKeyActive {
-		label = "send key: press key to send | Ctrl+S cancel"
+		label = prefix + "send key: press key to send | Ctrl+S cancel"
 	}
 	if state.lastErr != "" {
-		label = fmt.Sprintf("error: %s", state.lastErr)
+		label = fmt.Sprintf("%serror: %s", prefix, state.lastErr)
 	}
 	if len(label) < width {
 		label = label + strings.Repeat(" ", width-len(label))

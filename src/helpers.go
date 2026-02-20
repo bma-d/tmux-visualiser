@@ -7,7 +7,22 @@ func orderedSessionNames(state appState) []string {
 	for name := range state.sessions {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		left, lok := state.sessions[names[i]]
+		right, rok := state.sessions[names[j]]
+		if !lok || !rok {
+			return names[i] < names[j]
+		}
+		if left.name == right.name {
+			leftSocket := socketKey(left.socketPath)
+			rightSocket := socketKey(right.socketPath)
+			if leftSocket == rightSocket {
+				return names[i] < names[j]
+			}
+			return leftSocket < rightSocket
+		}
+		return left.name < right.name
+	})
 	return names
 }
 
