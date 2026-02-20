@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Added
+- Added `TODO.md` implementation plan to make sessions from default tmux and Lisa project sockets visible in one view.
 
 ## [1.1.0] - 2026-02-02
 ### Added

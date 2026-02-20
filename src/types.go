@@ -3,22 +3,42 @@ package main
 import "time"
 
 type config struct {
-	lines        int
-	interval     time.Duration
-	cmdTimeout   time.Duration
-	maxWorkers   int
-	statusHeight int
+	lines                int
+	interval             time.Duration
+	cmdTimeout           time.Duration
+	maxWorkers           int
+	statusHeight         int
+	includeDefaultSocket bool
+	includeLisaSockets   bool
+	socketGlob           string
+	explicitSockets      []string
 }
 
 type sessionView struct {
-	name    string
-	paneID  string
-	lines   []string
-	updated time.Time
+	key        string
+	name       string
+	socketPath string
+	socketHint string
+	paneID     string
+	lines      []string
+	updated    time.Time
+}
+
+type socketTarget struct {
+	path string
+	key  string
+	hint string
+}
+
+type sessionRef struct {
+	key    string
+	name   string
+	socket socketTarget
 }
 
 type appState struct {
 	sessions      map[string]sessionView
+	socketCount   int
 	lastErr       string
 	serverDown    bool
 	lastRefresh   time.Time
