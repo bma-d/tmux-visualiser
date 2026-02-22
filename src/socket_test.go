@@ -27,6 +27,15 @@ func stubLisaSockets(t *testing.T, paths []string, err error) {
 	lisaSocketCache.mu.Unlock()
 }
 
+func stubLisaSessionList(t *testing.T, fn func(context.Context, bool) ([]byte, error)) {
+	t.Helper()
+	orig := runLisaSessionListFn
+	t.Cleanup(func() {
+		runLisaSessionListFn = orig
+	})
+	runLisaSessionListFn = fn
+}
+
 func TestDiscoverSocketTargets(t *testing.T) {
 	t.Setenv("TMUX", "")
 	stubLisaSockets(t, []string{}, nil)
@@ -386,6 +395,49 @@ func TestDiscoverSocketTargetsIncludesLisaSocketsFromHelper(t *testing.T) {
 	}
 	if !containsString(keys, socketKey(socketFromLisa)) {
 		t.Fatalf("missing lisa helper socket target: %v", keys)
+	}
+}
+
+func TestListLisaSocketPathsFromLISAFallsBackWhenWithNextActionUnsupported(t *testing.T) {
+	cfg := config{cmdTimeout: 2 * time.Second}
+	unknownFlag := []byte(`{"error":"unknown flag: --with-next-action","errorCode":"unknown_flag","ok":false}`)
+	okPayload := []byte(`{"items":[{"projectRoot":"/tmp/proj-a"}]}`)
+	calls := make([]bool, 0, 2)
+	stubLisaSessionList(t, func(_ context.Context, withNextAction bool) ([]byte, error) {
+		calls = append(calls, withNextAction)
+		if withNextAction {
+			return unknownFlag, errors.New("exit status 1")
+		}
+		return okPayload, nil
+	})
+	got, err := listLisaSocketPathsFromLISA(cfg)
+	if err != nil {
+		t.Fatalf("listLisaSocketPathsFromLISA err: %v", err)
+	}
+	if !reflect.DeepEqual(calls, []bool{true, false}) {
+		t.Fatalf("calls = %v", calls)
+	}
+	root := canonicalProjectRoot("/tmp/proj-a")
+	want := []string{
+		tmuxSocketPathForProjectRoot(root),
+		tmuxLegacySocketPathForProjectRoot(root),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got = %v, want %v", got, want)
+	}
+}
+
+func TestListLisaSocketPathsFromLISAOldPayloadWithoutItemsReturnsEmpty(t *testing.T) {
+	cfg := config{cmdTimeout: 2 * time.Second}
+	stubLisaSessionList(t, func(_ context.Context, _ bool) ([]byte, error) {
+		return []byte(`{"count":2,"sessions":["a","b"]}`), nil
+	})
+	got, err := listLisaSocketPathsFromLISA(cfg)
+	if err != nil {
+		t.Fatalf("listLisaSocketPathsFromLISA err: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected no socket paths, got %v", got)
 	}
 }
 

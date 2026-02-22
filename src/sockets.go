@@ -21,6 +21,7 @@ const defaultLisaSocketGlob = "/tmp/lisa-tmux-*-*.sock"
 
 var listLisaSocketPathsFn = listLisaSocketPaths
 var listProcessCommandsFn = listProcessCommands
+var runLisaSessionListFn = runLisaSessionList
 
 var lisaSocketCache = struct {
 	mu      sync.Mutex
@@ -255,8 +256,10 @@ func listLisaSocketPathsFromLISA(cfg config) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "lisa", "session", "list", "--all-sockets", "--with-next-action", "--json")
-	out, err := cmd.CombinedOutput()
+	out, err := runLisaSessionListFn(ctx, true)
+	if err != nil && lisaUnknownWithNextActionError(out) {
+		out, err = runLisaSessionListFn(ctx, false)
+	}
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return []string{}, nil
@@ -271,20 +274,12 @@ func listLisaSocketPathsFromLISA(cfg config) ([]string, error) {
 		return nil, fmt.Errorf("lisa list failed: %s", strings.TrimSpace(string(out)))
 	}
 
-	var payload struct {
-		Items []struct {
-			ProjectRoot string `json:"projectRoot"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(out, &payload); err != nil {
+	projectRoots, err := lisaProjectRootsFromListPayload(out)
+	if err != nil {
 		return nil, fmt.Errorf("lisa list invalid json")
 	}
-	paths := make([]string, 0, len(payload.Items))
-	for _, item := range payload.Items {
-		root := canonicalProjectRoot(item.ProjectRoot)
-		if root == "" {
-			continue
-		}
+	paths := make([]string, 0, len(projectRoots)*2)
+	for _, root := range projectRoots {
 		paths = append(paths, tmuxSocketPathForProjectRoot(root))
 		legacy := tmuxLegacySocketPathForProjectRoot(root)
 		if legacy != "" && legacy != paths[len(paths)-1] {
@@ -292,6 +287,54 @@ func listLisaSocketPathsFromLISA(cfg config) ([]string, error) {
 		}
 	}
 	return dedupePaths(paths), nil
+}
+
+func runLisaSessionList(ctx context.Context, withNextAction bool) ([]byte, error) {
+	args := []string{"session", "list", "--all-sockets"}
+	if withNextAction {
+		args = append(args, "--with-next-action")
+	}
+	args = append(args, "--json")
+	cmd := exec.CommandContext(ctx, "lisa", args...)
+	return cmd.CombinedOutput()
+}
+
+func lisaUnknownWithNextActionError(out []byte) bool {
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return false
+	}
+	var payload struct {
+		Error     string `json:"error"`
+		ErrorCode string `json:"errorCode"`
+	}
+	if err := json.Unmarshal(out, &payload); err == nil {
+		if strings.EqualFold(payload.ErrorCode, "unknown_flag") && strings.Contains(payload.Error, "--with-next-action") {
+			return true
+		}
+	}
+	lower := strings.ToLower(trimmed)
+	return strings.Contains(lower, "unknown flag") && strings.Contains(lower, "--with-next-action")
+}
+
+func lisaProjectRootsFromListPayload(out []byte) ([]string, error) {
+	var payload struct {
+		Items []struct {
+			ProjectRoot string `json:"projectRoot"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(out, &payload); err != nil {
+		return nil, err
+	}
+	roots := make([]string, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		root := canonicalProjectRoot(item.ProjectRoot)
+		if root == "" {
+			continue
+		}
+		roots = append(roots, root)
+	}
+	return dedupePaths(roots), nil
 }
 
 func canonicalProjectRoot(projectRoot string) string {
