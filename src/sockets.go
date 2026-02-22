@@ -97,6 +97,13 @@ func sessionQualifiedKey(socketPath, sessionName string) string {
 	return socketKey(socketPath) + "::" + sessionName
 }
 
+func paneQualifiedKey(socketPath, sessionName, paneID string) string {
+	if strings.TrimSpace(paneID) == "" {
+		return sessionQualifiedKey(socketPath, sessionName)
+	}
+	return sessionQualifiedKey(socketPath, sessionName) + "::" + strings.TrimSpace(paneID)
+}
+
 func socketPathExists(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {

@@ -62,13 +62,14 @@ Optional flags:
 
 ```bash
 go run ./src -lines 300 -interval 500ms -cmd-timeout 1s -workers 4 \
+  -all-panes=true \
   -include-default-socket=true \
   -include-lisa-sockets=true \
   -socket /tmp/custom.sock \
   -socket-glob '/tmp/lisa-tmux-*-*.sock'
 ```
 
-Defaults are `-lines 500` and `-interval 1s`.
+Defaults include `-all-panes=true`, `-lines 500`, and `-interval 1s`.
 
 ## Controls
 
@@ -96,8 +97,9 @@ Defaults are `-lines 500` and `-interval 1s`.
   - explicit `-socket` flags (repeatable)
   - glob matches from `-socket-glob` (enabled by `-include-lisa-sockets`)
 - Polls each socket via `tmux -S <socket> list-sessions`.
-- For each session, finds the active pane on that same socket.
-- Captures the last N lines from that pane.
+- For each session, captures all panes by default (`-all-panes=true`).
+- Set `-all-panes=false` to capture only the active pane per session.
+- Captures the last N lines from each captured pane.
 - Lays out sessions in a grid that fills your terminal.
 
 ## Notes

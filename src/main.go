@@ -17,6 +17,7 @@ var (
 
 func main() {
 	cfg := config{
+		allPanes:             true,
 		includeDefaultSocket: true,
 		includeLisaSockets:   true,
 		socketGlob:           "/tmp/lisa-tmux-*-*.sock",
@@ -26,6 +27,7 @@ func main() {
 	flag.DurationVar(&cfg.interval, "interval", 1*time.Second, "refresh interval")
 	flag.DurationVar(&cfg.cmdTimeout, "cmd-timeout", 900*time.Millisecond, "timeout for each tmux command")
 	flag.IntVar(&cfg.maxWorkers, "workers", 4, "max concurrent tmux capture workers")
+	flag.BoolVar(&cfg.allPanes, "all-panes", true, "capture and render all panes (false: active pane only)")
 	flag.BoolVar(&cfg.includeDefaultSocket, "include-default-socket", true, "include tmux default socket")
 	flag.BoolVar(&cfg.includeLisaSockets, "include-lisa-sockets", true, "include lisa sockets from socket-glob")
 	flag.StringVar(&cfg.socketGlob, "socket-glob", "/tmp/lisa-tmux-*-*.sock", "glob used to discover lisa sockets")

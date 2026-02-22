@@ -8,6 +8,7 @@ type config struct {
 	cmdTimeout           time.Duration
 	maxWorkers           int
 	statusHeight         int
+	allPanes             bool
 	includeDefaultSocket bool
 	includeLisaSockets   bool
 	socketGlob           string
@@ -33,6 +34,7 @@ type socketTarget struct {
 type sessionRef struct {
 	key    string
 	name   string
+	paneID string
 	socket socketTarget
 }
 

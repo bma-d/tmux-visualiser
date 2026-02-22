@@ -62,20 +62,24 @@ func updateState(ctx context.Context, state *appState, cfg config) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			paneID, err := activePaneID(ctx, cfg, ref.socket.path, ref.name)
-			if err != nil {
-				mu.Lock()
-				newSessions[ref.key] = sessionView{
-					key:        ref.key,
-					name:       ref.name,
-					socketPath: ref.socket.path,
-					socketHint: ref.socket.hint,
-					paneID:     "",
-					lines:      []string{err.Error()},
-					updated:    time.Now(),
+			paneID := ref.paneID
+			if paneID == "" {
+				var err error
+				paneID, err = activePaneID(ctx, cfg, ref.socket.path, ref.name)
+				if err != nil {
+					mu.Lock()
+					newSessions[ref.key] = sessionView{
+						key:        ref.key,
+						name:       ref.name,
+						socketPath: ref.socket.path,
+						socketHint: ref.socket.hint,
+						paneID:     "",
+						lines:      []string{err.Error()},
+						updated:    time.Now(),
+					}
+					mu.Unlock()
+					return
 				}
-				mu.Unlock()
-				return
 			}
 
 			lines, err := capturePane(ctx, cfg, ref.socket.path, paneID, cfg.lines)
@@ -155,6 +159,12 @@ func listSessions(ctx context.Context, cfg config) ([]sessionRef, int, error) {
 	if successCount > 0 {
 		sort.Slice(merged, func(i, j int) bool {
 			if merged[i].name == merged[j].name {
+				if merged[i].socket.key == merged[j].socket.key {
+					if merged[i].paneID == merged[j].paneID {
+						return merged[i].key < merged[j].key
+					}
+					return merged[i].paneID < merged[j].paneID
+				}
 				return merged[i].socket.key < merged[j].socket.key
 			}
 			return merged[i].name < merged[j].name
@@ -193,13 +203,69 @@ func listSessionsOnSocket(ctx context.Context, cfg config, target socketTarget) 
 		if sessionName == "" {
 			continue
 		}
+		if cfg.allPanes {
+			paneIDs, paneErr := listPaneIDs(ctx, cfg, target.path, sessionName)
+			if paneErr != nil {
+				refs = append(refs, sessionRef{
+					key:    sessionQualifiedKey(target.path, sessionName),
+					name:   sessionName,
+					paneID: "",
+					socket: target,
+				})
+				continue
+			}
+			if len(paneIDs) == 0 {
+				refs = append(refs, sessionRef{
+					key:    sessionQualifiedKey(target.path, sessionName),
+					name:   sessionName,
+					paneID: "",
+					socket: target,
+				})
+				continue
+			}
+			for _, paneID := range paneIDs {
+				refs = append(refs, sessionRef{
+					key:    paneQualifiedKey(target.path, sessionName, paneID),
+					name:   sessionName,
+					paneID: paneID,
+					socket: target,
+				})
+			}
+			continue
+		}
 		refs = append(refs, sessionRef{
 			key:    sessionQualifiedKey(target.path, sessionName),
 			name:   sessionName,
+			paneID: "",
 			socket: target,
 		})
 	}
 	return refs, nil
+}
+
+func listPaneIDs(ctx context.Context, cfg config, socketPath string, session string) ([]string, error) {
+	out, err := runTmuxOnSocketFn(ctx, cfg, socketPath, "list-panes", "-t", session, "-F", "#{pane_id}")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(out) == "" {
+		return []string{}, nil
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	paneIDs := make([]string, 0, len(lines))
+	seen := make(map[string]struct{}, len(lines))
+	for _, line := range lines {
+		paneID := strings.TrimSpace(line)
+		if paneID == "" {
+			continue
+		}
+		if _, ok := seen[paneID]; ok {
+			continue
+		}
+		seen[paneID] = struct{}{}
+		paneIDs = append(paneIDs, paneID)
+	}
+	return paneIDs, nil
 }
 
 func activePaneID(ctx context.Context, cfg config, socketPath string, session string) (string, error) {

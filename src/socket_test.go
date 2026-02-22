@@ -459,3 +459,75 @@ func TestListSessionsFallsBackToCurrentTMUXSocket(t *testing.T) {
 		t.Fatalf("unexpected key = %q", refs[0].key)
 	}
 }
+
+func TestPaneQualifiedKey(t *testing.T) {
+	got := paneQualifiedKey("/tmp/a.sock", "alpha", "%3")
+	want := sessionQualifiedKey("/tmp/a.sock", "alpha") + "::%3"
+	if got != want {
+		t.Fatalf("paneQualifiedKey = %q, want %q", got, want)
+	}
+
+	got = paneQualifiedKey("/tmp/a.sock", "alpha", "")
+	want = sessionQualifiedKey("/tmp/a.sock", "alpha")
+	if got != want {
+		t.Fatalf("paneQualifiedKey fallback = %q, want %q", got, want)
+	}
+}
+
+func TestListSessionsOnSocketAllPanes(t *testing.T) {
+	socketPath := "/tmp/test-all-panes.sock"
+
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		if socket != socketPath {
+			return "", errors.New("unexpected socket")
+		}
+		switch args[0] {
+		case "list-sessions":
+			return "alpha\nbeta", nil
+		case "list-panes":
+			switch args[2] {
+			case "alpha":
+				return "%1\n%3", nil
+			case "beta":
+				return "%7", nil
+			default:
+				return "", errors.New("unexpected session")
+			}
+		default:
+			return "", errors.New("unexpected command")
+		}
+	}
+
+	cfg := config{allPanes: true}
+	target := makeSocketTarget(socketPath)
+	refs, err := listSessionsOnSocket(context.Background(), cfg, target)
+	if err != nil {
+		t.Fatalf("listSessionsOnSocket err: %v", err)
+	}
+	if len(refs) != 3 {
+		t.Fatalf("refs len = %d", len(refs))
+	}
+
+	keys := map[string]bool{}
+	panes := map[string]bool{}
+	for _, ref := range refs {
+		keys[ref.key] = true
+		panes[ref.paneID] = true
+	}
+	if !keys[paneQualifiedKey(socketPath, "alpha", "%1")] {
+		t.Fatalf("missing alpha %%1 key")
+	}
+	if !keys[paneQualifiedKey(socketPath, "alpha", "%3")] {
+		t.Fatalf("missing alpha %%3 key")
+	}
+	if !keys[paneQualifiedKey(socketPath, "beta", "%7")] {
+		t.Fatalf("missing beta %%7 key")
+	}
+	if !panes["%1"] || !panes["%3"] || !panes["%7"] {
+		t.Fatalf("unexpected pane ids: %#v", panes)
+	}
+}

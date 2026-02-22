@@ -202,8 +202,12 @@ func drawStatus(screen tcell.Screen, width, y int, style tcell.Style, state appS
 	if state.mouseEnabled {
 		mouseState = "on"
 	}
-	prefix := fmt.Sprintf("sockets:%d | sessions:%d | ", state.socketCount, sessionCount)
-	label := fmt.Sprintf("%slines:%d | interval:%s | tab:focus j/k:scroll enter:attach i:compose s:send-key Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", prefix, cfg.lines, cfg.interval, mouseState)
+	entryLabel := "sessions"
+	if cfg.allPanes {
+		entryLabel = "panes"
+	}
+	prefix := fmt.Sprintf("sockets:%d | %s:%d | ", state.socketCount, entryLabel, sessionCount)
+	label := fmt.Sprintf("%slines:%d | interval:%s | all-panes:%t | tab:focus j/k:scroll enter:attach i:compose s:send-key Ctrl+K:kill [ ]:interval m:mouse(%s) q:quit", prefix, cfg.lines, cfg.interval, cfg.allPanes, mouseState)
 	if state.composeActive {
 		label = prefix + "compose (live): type to send | Enter newline | Ctrl+S exit"
 	}
