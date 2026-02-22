@@ -20,7 +20,7 @@ func main() {
 		allPanes:             true,
 		includeDefaultSocket: true,
 		includeLisaSockets:   true,
-		socketGlob:           "/tmp/lisa-tmux-*-*.sock",
+		socketGlob:           defaultLisaSocketGlob,
 	}
 	showVersion := false
 	flag.IntVar(&cfg.lines, "lines", 500, "number of lines to capture per session")
@@ -30,7 +30,7 @@ func main() {
 	flag.BoolVar(&cfg.allPanes, "all-panes", true, "capture and render all panes (false: active pane only)")
 	flag.BoolVar(&cfg.includeDefaultSocket, "include-default-socket", true, "include tmux default socket")
 	flag.BoolVar(&cfg.includeLisaSockets, "include-lisa-sockets", true, "include lisa sockets from socket-glob")
-	flag.StringVar(&cfg.socketGlob, "socket-glob", "/tmp/lisa-tmux-*-*.sock", "glob used to discover lisa sockets")
+	flag.StringVar(&cfg.socketGlob, "socket-glob", defaultLisaSocketGlob, "glob used to discover lisa sockets")
 	flag.Var((*stringSliceFlag)(&cfg.explicitSockets), "socket", "explicit tmux socket path (repeatable)")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&showVersion, "v", false, "print version and exit (shorthand)")

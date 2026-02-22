@@ -3,6 +3,7 @@
 A lightweight terminal UI that continuously discovers tmux sessions and renders live snapshots of each session's active pane. When there is one session, it fills the screen. When there are multiple, the screen is automatically split into a grid so you can see them all at once.
 
 This avoids nested tmux clients by capturing pane contents via `tmux capture-pane` and drawing them directly.
+It also explicitly attempts to discover Lisa-managed tmux sessions across project sockets.
 
 ## Requirements
 
@@ -92,10 +93,13 @@ Defaults include `-all-panes=true`, `-lines 500`, and `-interval 1s`.
 
 ## How it works
 
+- Explicit Lisa discovery is enabled by default: tmux-visualiser explicitly attempts to discover Lisa sessions.
 - Discovers sockets from:
   - default tmux socket (enabled by `-include-default-socket`)
   - explicit `-socket` flags (repeatable)
-  - glob matches from `-socket-glob` (enabled by `-include-lisa-sockets`)
+  - Lisa socket globs from `-socket-glob` plus built-in `/private/tmp` + legacy fallbacks (enabled by `-include-lisa-sockets`)
+  - active tmux `-S` sockets discovered from process table when they look like Lisa sockets
+  - best-effort `lisa session list --all-sockets --with-next-action --json` discovery when `lisa` is available on PATH
 - Polls each socket via `tmux -S <socket> list-sessions`.
 - For each session, captures all panes by default (`-all-panes=true`).
 - Set `-all-panes=false` to capture only the active pane per session.
@@ -114,7 +118,8 @@ Defaults include `-all-panes=true`, `-lines 500`, and `-interval 1s`.
 
 - Lisa uses per-project tmux sockets. If your Lisa sessions are missing, verify:
   - `-include-lisa-sockets=true`
-  - `-socket-glob` matches your Lisa socket pattern
+  - `lisa` is on PATH (for extra `--all-sockets`-style discovery)
+  - `-socket-glob` matches your Lisa socket pattern if you override defaults
 
 ## Changelog
 

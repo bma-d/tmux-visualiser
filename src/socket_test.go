@@ -8,10 +8,28 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+func stubLisaSockets(t *testing.T, paths []string, err error) {
+	t.Helper()
+	origList := listLisaSocketPathsFn
+	t.Cleanup(func() {
+		listLisaSocketPathsFn = origList
+	})
+	listLisaSocketPathsFn = func(config) ([]string, error) {
+		return paths, err
+	}
+	lisaSocketCache.mu.Lock()
+	lisaSocketCache.at = time.Time{}
+	lisaSocketCache.paths = nil
+	lisaSocketCache.errText = ""
+	lisaSocketCache.mu.Unlock()
+}
 
 func TestDiscoverSocketTargets(t *testing.T) {
 	t.Setenv("TMUX", "")
+	stubLisaSockets(t, []string{}, nil)
 
 	tmpDir := t.TempDir()
 	socketA := filepath.Join(tmpDir, "a.sock")
@@ -51,6 +69,7 @@ func TestDiscoverSocketTargets(t *testing.T) {
 
 func TestDiscoverSocketTargetsInvalidGlob(t *testing.T) {
 	t.Setenv("TMUX", "")
+	stubLisaSockets(t, []string{}, nil)
 
 	cfg := config{
 		includeLisaSockets: true,
@@ -248,6 +267,7 @@ func TestListSessionsReturnsPartialResultsWithTmuxPermissionError(t *testing.T) 
 
 func TestListSessionsIncludesSocketGlobDiscoveryError(t *testing.T) {
 	t.Setenv("TMUX", "")
+	stubLisaSockets(t, []string{}, nil)
 
 	origRun := runTmuxOnSocketFn
 	t.Cleanup(func() {
@@ -338,6 +358,68 @@ func TestUpdateStateKeepsPartialSessionsOnSocketError(t *testing.T) {
 	if _, ok := state.sessions[sessionQualifiedKey("", "alpha")]; !ok {
 		t.Fatalf("missing default alpha session")
 	}
+}
+
+func TestDiscoverSocketTargetsIncludesLisaSocketsFromHelper(t *testing.T) {
+	t.Setenv("TMUX", "")
+
+	tmpDir := t.TempDir()
+	socketA := filepath.Join(tmpDir, "a.sock")
+	if err := os.WriteFile(socketA, []byte("a"), 0o600); err != nil {
+		t.Fatalf("write socketA: %v", err)
+	}
+	socketFromLisa := filepath.Join(tmpDir, "from-lisa.sock")
+	stubLisaSockets(t, []string{socketFromLisa}, nil)
+
+	cfg := config{
+		includeDefaultSocket: true,
+		includeLisaSockets:   true,
+		socketGlob:           filepath.Join(tmpDir, "*.sock"),
+	}
+	targets, discoveryErrors := discoverSocketTargets(cfg)
+	if len(discoveryErrors) != 0 {
+		t.Fatalf("unexpected discoveryErrors: %v", discoveryErrors)
+	}
+	keys := make([]string, 0, len(targets))
+	for _, target := range targets {
+		keys = append(keys, target.key)
+	}
+	if !containsString(keys, socketKey(socketFromLisa)) {
+		t.Fatalf("missing lisa helper socket target: %v", keys)
+	}
+}
+
+func TestExtractTmuxSocketPathsFromCommands(t *testing.T) {
+	commands := []string{
+		"/opt/homebrew/bin/tmux -S /tmp/lisa-a.sock new -d",
+		"tmux -S /tmp/tmux-1000/default list-sessions",
+		"/usr/bin/tmux -L dev list-sessions",
+		"/usr/bin/tmux -S /tmp/lisa-b.sock has-session -t x",
+		"zsh -lc echo hi",
+	}
+	got := extractTmuxSocketPathsFromCommands(commands)
+	want := []string{"/tmp/lisa-a.sock", "/tmp/tmux-1000/default", "/tmp/lisa-b.sock"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected socket extraction; got=%v want=%v", got, want)
+	}
+}
+
+func TestLisaSocketGlobsCustomOverridesFallbacks(t *testing.T) {
+	custom := "/tmp/custom-*.sock"
+	got := lisaSocketGlobs(custom)
+	want := []string{custom}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected globs; got=%v want=%v", got, want)
+	}
+}
+
+func containsString(items []string, needle string) bool {
+	for _, item := range items {
+		if item == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSocketUsedForListPaneCapture(t *testing.T) {
