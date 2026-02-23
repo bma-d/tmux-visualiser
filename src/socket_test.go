@@ -418,10 +418,10 @@ func TestListLisaSocketPathsFromLISAFallsBackWhenWithNextActionUnsupported(t *te
 		t.Fatalf("calls = %v", calls)
 	}
 	root := canonicalProjectRoot("/tmp/proj-a")
-	want := []string{
+	want := dedupePaths([]string{
 		tmuxSocketPathForProjectRoot(root),
 		tmuxLegacySocketPathForProjectRoot(root),
-	}
+	})
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got = %v, want %v", got, want)
 	}
@@ -451,11 +451,11 @@ func TestListLisaSocketPathsFromLISAUsesSocketPathFieldWhenPresent(t *testing.T)
 		t.Fatalf("listLisaSocketPathsFromLISA err: %v", err)
 	}
 	rootB := canonicalProjectRoot("/tmp/proj-b")
-	want := []string{
+	want := dedupePaths([]string{
 		"/tmp/custom-a.sock",
 		tmuxSocketPathForProjectRoot(rootB),
 		tmuxLegacySocketPathForProjectRoot(rootB),
-	}
+	})
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got = %v, want %v", got, want)
 	}
