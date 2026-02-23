@@ -441,6 +441,47 @@ func TestListLisaSocketPathsFromLISAOldPayloadWithoutItemsReturnsEmpty(t *testin
 	}
 }
 
+func TestListLisaSocketPathsFromLISAUsesSocketPathFieldWhenPresent(t *testing.T) {
+	cfg := config{cmdTimeout: 2 * time.Second}
+	stubLisaSessionList(t, func(_ context.Context, _ bool) ([]byte, error) {
+		return []byte(`{"items":[{"projectRoot":"/tmp/proj-a","socketPath":"/tmp/custom-a.sock"},{"projectRoot":"/tmp/proj-b"}]}`), nil
+	})
+	got, err := listLisaSocketPathsFromLISA(cfg)
+	if err != nil {
+		t.Fatalf("listLisaSocketPathsFromLISA err: %v", err)
+	}
+	rootB := canonicalProjectRoot("/tmp/proj-b")
+	want := []string{
+		"/tmp/custom-a.sock",
+		tmuxSocketPathForProjectRoot(rootB),
+		tmuxLegacySocketPathForProjectRoot(rootB),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got = %v, want %v", got, want)
+	}
+}
+
+func TestListLisaSocketPathsFromProcessTableIncludesNonLisaNamedSockets(t *testing.T) {
+	origList := listProcessCommandsFn
+	t.Cleanup(func() {
+		listProcessCommandsFn = origList
+	})
+	listProcessCommandsFn = func() ([]string, error) {
+		return []string{
+			"tmux -S /tmp/custom.sock list-sessions",
+			"tmux -S /tmp/lisa-a.sock list-sessions",
+		}, nil
+	}
+	got, err := listLisaSocketPathsFromProcessTable()
+	if err != nil {
+		t.Fatalf("listLisaSocketPathsFromProcessTable err: %v", err)
+	}
+	want := []string{"/tmp/custom.sock", "/tmp/lisa-a.sock"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got = %v, want %v", got, want)
+	}
+}
+
 func TestExtractTmuxSocketPathsFromCommands(t *testing.T) {
 	commands := []string{
 		"/opt/homebrew/bin/tmux -S /tmp/lisa-a.sock new -d",
@@ -605,6 +646,40 @@ func TestPaneQualifiedKey(t *testing.T) {
 	want = sessionQualifiedKey("/tmp/a.sock", "alpha")
 	if got != want {
 		t.Fatalf("paneQualifiedKey fallback = %q, want %q", got, want)
+	}
+}
+
+func TestCapturePaneFallsBackToAlternateScreen(t *testing.T) {
+	origRun := runTmuxOnSocketFn
+	t.Cleanup(func() {
+		runTmuxOnSocketFn = origRun
+	})
+
+	calls := make([]string, 0, 2)
+	runTmuxOnSocketFn = func(_ context.Context, _ config, socket string, args ...string) (string, error) {
+		calls = append(calls, socket+"|"+strings.Join(args, " "))
+		if len(args) == 0 || args[0] != "capture-pane" {
+			return "", errors.New("unexpected command")
+		}
+		if len(args) > 1 && args[1] == "-a" {
+			return "alt-line-1\nalt-line-2\n", nil
+		}
+		return "\n", nil
+	}
+
+	lines, err := capturePane(context.Background(), config{}, "/tmp/test.sock", "%1", 80)
+	if err != nil {
+		t.Fatalf("capturePane err: %v", err)
+	}
+	want := []string{"alt-line-1", "alt-line-2"}
+	if !reflect.DeepEqual(lines, want) {
+		t.Fatalf("lines = %v, want %v", lines, want)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("calls len = %d", len(calls))
+	}
+	if !strings.Contains(calls[1], "capture-pane -a -t %1 -p -e -S -80") {
+		t.Fatalf("expected alternate-screen capture fallback, got %q", calls[1])
 	}
 }
 

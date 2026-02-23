@@ -301,12 +301,42 @@ func capturePane(ctx context.Context, cfg config, socketPath string, paneID stri
 	if err != nil {
 		return nil, err
 	}
-	if out == "" {
+
+	primary := normalizeCaptureOutput(out)
+	if hasVisibleCapture(primary) {
+		return primary, nil
+	}
+
+	altOut, altErr := runTmuxOnSocketFn(ctx, cfg, socketPath, "capture-pane", "-a", "-t", paneID, "-p", "-e", "-S", rangeArg)
+	if altErr == nil {
+		alt := normalizeCaptureOutput(altOut)
+		if len(alt) > 0 {
+			return alt, nil
+		}
+	}
+
+	if len(primary) == 0 {
 		return []string{"(empty)"}, nil
+	}
+	return primary, nil
+}
+
+func normalizeCaptureOutput(out string) []string {
+	if out == "" {
+		return []string{}
 	}
 	result := strings.Split(out, "\n")
 	if len(result) > 0 && result[len(result)-1] == "" {
 		result = result[:len(result)-1]
 	}
-	return result, nil
+	return result
+}
+
+func hasVisibleCapture(lines []string) bool {
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			return true
+		}
+	}
+	return false
 }

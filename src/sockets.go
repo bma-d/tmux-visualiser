@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -193,14 +193,7 @@ func listLisaSocketPathsFromProcessTable() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths := extractTmuxSocketPathsFromCommands(commands)
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if isLikelyLisaSocketPath(path) {
-			out = append(out, path)
-		}
-	}
-	return out, nil
+	return extractTmuxSocketPathsFromCommands(commands), nil
 }
 
 func listProcessCommands() ([]string, error) {
@@ -274,19 +267,11 @@ func listLisaSocketPathsFromLISA(cfg config) ([]string, error) {
 		return nil, fmt.Errorf("lisa list failed: %s", strings.TrimSpace(string(out)))
 	}
 
-	projectRoots, err := lisaProjectRootsFromListPayload(out)
+	socketPaths, err := lisaSocketPathsFromListPayload(out)
 	if err != nil {
 		return nil, fmt.Errorf("lisa list invalid json")
 	}
-	paths := make([]string, 0, len(projectRoots)*2)
-	for _, root := range projectRoots {
-		paths = append(paths, tmuxSocketPathForProjectRoot(root))
-		legacy := tmuxLegacySocketPathForProjectRoot(root)
-		if legacy != "" && legacy != paths[len(paths)-1] {
-			paths = append(paths, legacy)
-		}
-	}
-	return dedupePaths(paths), nil
+	return socketPaths, nil
 }
 
 func runLisaSessionList(ctx context.Context, withNextAction bool) ([]byte, error) {
@@ -317,24 +302,34 @@ func lisaUnknownWithNextActionError(out []byte) bool {
 	return strings.Contains(lower, "unknown flag") && strings.Contains(lower, "--with-next-action")
 }
 
-func lisaProjectRootsFromListPayload(out []byte) ([]string, error) {
+func lisaSocketPathsFromListPayload(out []byte) ([]string, error) {
 	var payload struct {
 		Items []struct {
 			ProjectRoot string `json:"projectRoot"`
+			SocketPath  string `json:"socketPath"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(out, &payload); err != nil {
 		return nil, err
 	}
-	roots := make([]string, 0, len(payload.Items))
+	paths := make([]string, 0, len(payload.Items)*2)
 	for _, item := range payload.Items {
+		socketPath := strings.TrimSpace(item.SocketPath)
+		if socketPath != "" {
+			paths = append(paths, filepath.Clean(socketPath))
+			continue
+		}
 		root := canonicalProjectRoot(item.ProjectRoot)
 		if root == "" {
 			continue
 		}
-		roots = append(roots, root)
+		paths = append(paths, tmuxSocketPathForProjectRoot(root))
+		legacy := tmuxLegacySocketPathForProjectRoot(root)
+		if legacy != "" {
+			paths = append(paths, legacy)
+		}
 	}
-	return dedupePaths(roots), nil
+	return dedupePaths(paths), nil
 }
 
 func canonicalProjectRoot(projectRoot string) string {
@@ -406,14 +401,6 @@ func preferredTmuxSocketDir() string {
 		return "/tmp"
 	}
 	return filepath.Clean(tmp)
-}
-
-func isLikelyLisaSocketPath(path string) bool {
-	base := strings.ToLower(filepath.Base(strings.TrimSpace(path)))
-	if base == "lisa-codex-nosb.sock" {
-		return true
-	}
-	return strings.HasPrefix(base, "lisa-") && strings.HasSuffix(base, ".sock")
 }
 
 func makeSocketTarget(path string) socketTarget {
