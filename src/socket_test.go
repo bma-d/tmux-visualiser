@@ -506,6 +506,37 @@ func TestLisaSocketGlobsCustomOverridesFallbacks(t *testing.T) {
 	}
 }
 
+func TestDiscoverSocketTargetsDedupesSymlinkedSocketAliases(t *testing.T) {
+	t.Setenv("TMUX", "")
+	stubLisaSockets(t, []string{}, nil)
+
+	realDir := t.TempDir()
+	linkDir := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	socketName := "same.sock"
+	realSocket := filepath.Join(realDir, socketName)
+	aliasSocket := filepath.Join(linkDir, socketName)
+	if err := os.WriteFile(realSocket, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write real socket: %v", err)
+	}
+
+	cfg := config{
+		includeDefaultSocket: false,
+		includeLisaSockets:   false,
+		explicitSockets:      []string{realSocket, aliasSocket},
+	}
+	targets, discoveryErrors := discoverSocketTargets(cfg)
+	if len(discoveryErrors) != 0 {
+		t.Fatalf("unexpected discoveryErrors: %v", discoveryErrors)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("targets len = %d, targets=%v", len(targets), targets)
+	}
+}
+
 func containsString(items []string, needle string) bool {
 	for _, item := range items {
 		if item == needle {

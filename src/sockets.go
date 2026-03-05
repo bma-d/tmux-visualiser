@@ -179,13 +179,33 @@ func dedupePaths(paths []string) []string {
 		if clean == "" || clean == "." {
 			continue
 		}
-		if _, ok := seen[clean]; ok {
+		key := canonicalSocketPathKey(clean)
+		if key == "" {
+			key = clean
+		}
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		seen[clean] = struct{}{}
+		seen[key] = struct{}{}
 		out = append(out, clean)
 	}
 	return out
+}
+
+func canonicalSocketPathKey(path string) string {
+	clean := filepath.Clean(strings.TrimSpace(path))
+	if clean == "" || clean == "." {
+		return ""
+	}
+	resolved, err := filepath.EvalSymlinks(clean)
+	if err != nil {
+		return clean
+	}
+	resolved = filepath.Clean(strings.TrimSpace(resolved))
+	if resolved == "" || resolved == "." {
+		return clean
+	}
+	return resolved
 }
 
 func listLisaSocketPathsFromProcessTable() ([]string, error) {
@@ -415,7 +435,7 @@ func socketKey(path string) string {
 	if strings.TrimSpace(path) == "" {
 		return defaultSocketKey
 	}
-	return filepath.Clean(path)
+	return canonicalSocketPathKey(path)
 }
 
 func socketHint(path string) string {
